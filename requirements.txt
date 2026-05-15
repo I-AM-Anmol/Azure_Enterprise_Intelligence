@@ -1,0 +1,5 @@
+streamlit>=1.57.0
+msal>=1.28.0
+requests>=2.27.0
+pandas>=1.4.0
+plotly>=5.0.0
