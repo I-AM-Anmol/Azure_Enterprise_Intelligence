@@ -268,20 +268,38 @@ div[data-testid="stSegmentedControl"] button:hover {
 """, unsafe_allow_html=True)
 
 # ── Filters ───────────────────────────────────────────────────────────────────
-fp1, fp2, fp3, fp4 = st.columns([2, 5, 2, 4])
+# Row 1: Subscription | Account Name | Policy Name
+fr1, fr2, fr3 = st.columns(3)
 
-with fp1:
+with fr1:
     st.caption("SUBSCRIPTION")
-
-with fp2:
     sub_options = sorted(accts_df[display_sub_col].dropna().unique().tolist()) if (not accts_df.empty and display_sub_col) else []
     sel_subs    = st.multiselect("", sub_options, label_visibility="collapsed",
                                  key="sub_filter", placeholder="Filter by subscription name...")
 
-with fp3:
-    st.caption("POLICY STATUS")
+with fr2:
+    st.caption("ACCOUNT NAME")
+    acct_options = sorted(accts_df[acct_name_col].dropna().unique().tolist()) if not accts_df.empty else []
+    sel_accts    = st.multiselect("", acct_options, label_visibility="collapsed",
+                                  key="acct_filter", placeholder="Filter by account name...")
 
-with fp4:
+with fr3:
+    st.caption("POLICY NAME")
+    # Use PolicyDisplay/policy_col field from the data
+    if policy_col and not accts_df.empty:
+        pol_name_options = sorted(accts_df[policy_col].dropna().unique().tolist())
+        pol_name_options = [p for p in pol_name_options if str(p).strip() not in ("", "nan", "None")]
+    else:
+        pol_name_options = []
+    sel_policies = st.multiselect("", pol_name_options, label_visibility="collapsed",
+                                  key="pol_filter", placeholder="Filter by policy name...")
+
+# Row 2: Policy Status pills
+st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
+ps1, ps2 = st.columns([2, 10])
+with ps1:
+    st.caption("POLICY STATUS")
+with ps2:
     pf = st.segmented_control(
         "", ["All", "✓ Implemented", "✗ Not Implemented"],
         default="All", label_visibility="collapsed", key="policy_seg"
@@ -301,6 +319,10 @@ filtered = accts_df.copy() if not accts_df.empty else pd.DataFrame()
 if not filtered.empty:
     if sel_subs and display_sub_col:
         filtered = filtered[filtered[display_sub_col].isin(sel_subs)]
+    if sel_accts:
+        filtered = filtered[filtered[acct_name_col].isin(sel_accts)]
+    if sel_policies and policy_col:
+        filtered = filtered[filtered[policy_col].isin(sel_policies)]
     if pf == "✓ Implemented":
         filtered = filtered[filtered["HasPolicy"] == True]
     elif pf == "✗ Not Implemented":
