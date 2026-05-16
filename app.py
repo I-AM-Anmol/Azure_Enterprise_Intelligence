@@ -245,52 +245,33 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ── Filter panel CSS ──────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-/* Filter panel container */
-.filter-panel {
-    background:#131929; border-radius:10px;
-    padding:14px 22px; margin-bottom:18px;
-    border:1px solid #1e2d4a;
-    display:flex; align-items:center; gap:32px; flex-wrap:wrap;
+/* Segmented control pill styling */
+div[data-testid="stSegmentedControl"] { gap:0 !important; }
+div[data-testid="stSegmentedControl"] > label { display:none !important; }
+div[data-testid="stSegmentedControl"] button {
+    border-radius:20px !important;
+    font-size:0.78rem !important; font-weight:600 !important;
+    padding:5px 18px !important;
+    border:1.5px solid #2a3a55 !important;
+    background:#0d1226 !important; color:#a0b8d8 !important;
+    margin:0 3px !important;
 }
-.filter-group { display:flex; align-items:center; gap:10px; }
-.filter-tag {
-    font-size:0.68rem; font-weight:700; color:#6a7a99;
-    text-transform:uppercase; letter-spacing:.09em; white-space:nowrap;
-}
-
-/* Radio pill buttons */
-div[data-testid="stRadio"] { margin:0 !important; }
-div[data-testid="stRadio"] > label { display:none; }
-div[data-testid="stRadio"] > div {
-    display:flex !important; flex-direction:row !important;
-    gap:6px !important; flex-wrap:nowrap !important;
-}
-div[data-testid="stRadio"] div[data-testid="stMarkdownContainer"] { display:none; }
-div[data-testid="stRadio"] label[data-baseweb="radio"] {
-    background:#0d1226 !important; border-radius:20px !important;
-    padding:5px 16px !important; border:1.5px solid #2a3a55 !important;
-    cursor:pointer !important; margin:0 !important;
-}
-div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) {
-    background:#1565c0 !important; border-color:#1565c0 !important;
-}
-div[data-testid="stRadio"] label[data-baseweb="radio"] span[data-testid="stMarkdownContainer"] p {
-    font-size:0.77rem !important; font-weight:600 !important; color:#a0b8d8 !important;
-}
-div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) span[data-testid="stMarkdownContainer"] p {
+div[data-testid="stSegmentedControl"] button[aria-checked="true"] {
+    background:#1565c0 !important;
+    border-color:#1565c0 !important;
     color:#ffffff !important;
 }
-/* Hide the radio circle dot */
-div[data-testid="stRadio"] div[role="radiogroup"] svg { display:none !important; }
-div[data-testid="stRadio"] div[role="radiogroup"] div[data-testid="stWidgetLabel"] { display:none !important; }
+div[data-testid="stSegmentedControl"] button:hover {
+    border-color:#4da6ff !important; color:#4da6ff !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ── Filters ───────────────────────────────────────────────────────────────────
-fp1, fp2, fp3, fp4, fp5 = st.columns([2, 4, 1, 4, 2])
+fp1, fp2, fp3, fp4 = st.columns([2, 5, 2, 4])
 
 with fp1:
-    st.markdown('<p class="filter-tag">Subscription</p>', unsafe_allow_html=True)
+    st.caption("SUBSCRIPTION")
 
 with fp2:
     sub_options = sorted(accts_df[display_sub_col].dropna().unique().tolist()) if (not accts_df.empty and display_sub_col) else []
@@ -298,23 +279,21 @@ with fp2:
                                  key="sub_filter", placeholder="Filter by subscription name...")
 
 with fp3:
-    st.markdown('<p class="filter-tag">Policy Status</p>', unsafe_allow_html=True)
+    st.caption("POLICY STATUS")
 
 with fp4:
-    pf = st.radio(
+    pf = st.segmented_control(
         "", ["All", "✓ Implemented", "✗ Not Implemented"],
-        horizontal=True, label_visibility="collapsed", key="policy_radio"
+        default="All", label_visibility="collapsed", key="policy_seg"
     )
-
-with fp5:
-    csv_all = accts_df.to_csv(index=False).encode() if not accts_df.empty else b""
-    st.download_button("⬇ Export Filtered CSV", csv_all, "storage_lifecycle.csv", "text/csv", key="exp_all")
+    if pf is None:
+        pf = "All"
 
 # Active filter badge
 if pf == "✓ Implemented":
-    st.markdown('<span style="display:inline-block;background:#1e8e3e;color:#fff;border-radius:12px;padding:2px 12px;font-size:0.72rem;font-weight:600;">● Showing: ✓ Implemented only</span>', unsafe_allow_html=True)
+    st.markdown('<span style="display:inline-block;background:#1e8e3e;color:#fff;border-radius:12px;padding:2px 12px;font-size:0.72rem;font-weight:600;margin-top:4px;">● Showing: ✓ Implemented only</span>', unsafe_allow_html=True)
 elif pf == "✗ Not Implemented":
-    st.markdown('<span style="display:inline-block;background:#c62828;color:#fff;border-radius:12px;padding:2px 12px;font-size:0.72rem;font-weight:600;">● Showing: ✗ Not Implemented only</span>', unsafe_allow_html=True)
+    st.markdown('<span style="display:inline-block;background:#c62828;color:#fff;border-radius:12px;padding:2px 12px;font-size:0.72rem;font-weight:600;margin-top:4px;">● Showing: ✗ Not Implemented only</span>', unsafe_allow_html=True)
 
 # ── Apply filters ─────────────────────────────────────────────────────────────
 filtered = accts_df.copy() if not accts_df.empty else pd.DataFrame()
@@ -327,9 +306,15 @@ if not filtered.empty:
     elif pf == "✗ Not Implemented":
         filtered = filtered[filtered["HasPolicy"] == False]
 
+csv_all = filtered.to_csv(index=False).encode() if not filtered.empty else b""
+
 # ── Subscription Coverage Matrix ──────────────────────────────────────────────
 st.markdown("---")
-st.markdown('<div class="section-label">Subscription Coverage Matrix</div>', unsafe_allow_html=True)
+mc_title, mc_export = st.columns([6, 2])
+with mc_title:
+    st.markdown('<div class="section-label">Subscription Coverage Matrix</div>', unsafe_allow_html=True)
+with mc_export:
+    st.download_button("⬇ Export CSV", csv_all, "storage_lifecycle_filtered.csv", "text/csv", key="exp_all")
 
 # Build subscription list
 if not filtered.empty and display_sub_col:
