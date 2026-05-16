@@ -70,9 +70,10 @@ st.markdown("""
 .stDownloadButton > button:hover { background:#1976d2 !important; }
 
 .stButton > button {
-    border-radius:20px !important; font-size:0.77rem !important;
-    padding:5px 16px !important; border:1.5px solid #2a3a55 !important;
-    background:#0d1226 !important; color:#a0b8d8 !important; font-weight:600 !important;
+    border-radius:6px !important; font-size:0.82rem !important;
+    padding:7px 12px !important; border:1px solid #1e2d4a !important;
+    background:#131929 !important; color:#c0d0e8 !important; font-weight:600 !important;
+    text-align:left !important; justify-content:flex-start !important;
 }
 .stButton > button:hover { background:#1a2a45 !important; color:#4da6ff !important; border-color:#4da6ff !important; }
 
@@ -349,16 +350,21 @@ else:
 if not sub_list:
     st.info("No subscriptions match the current filters.")
 else:
-    # Column headers
-    h1, h2, h3, h4, h5 = st.columns([5, 3, 2, 2, 2])
+    # Column headers — 6 columns
+    h1, h2, h3, h4, h5, h6 = st.columns([5, 3, 2, 2, 2, 2])
     h1.markdown("**Subscription / Storage Account**")
     h2.markdown("**Policy Name**")
     h3.markdown("**Total**")
     h4.markdown("**With Policy**")
-    h5.markdown("**Coverage %**")
+    h5.markdown("**Without Policy**")
+    h6.markdown("**Coverage %**")
     st.markdown("<hr style='margin:4px 0;'>", unsafe_allow_html=True)
 
     for sub_name in sub_list:
+        exp_key = f"_xp_{sub_name}"
+        if exp_key not in st.session_state:
+            st.session_state[exp_key] = False
+
         if sub_groups and sub_name in sub_groups.groups:
             grp       = sub_groups.get_group(sub_name)
             t_total   = len(grp)
@@ -366,31 +372,38 @@ else:
             t_without = t_total - t_with
             t_cov     = round(t_with / t_total * 100, 1) if t_total else 0
             cov_icon  = "🟢" if t_cov >= 75 else ("🟡" if t_cov >= 50 else "🔴")
+            cov_color = "#2ecc71" if t_cov >= 75 else ("#f39c12" if t_cov >= 50 else "#e74c3c")
 
-            label = f"{cov_icon} {sub_name}  —  {t_total} accounts · ✅ {t_with} · ❌ {t_without} · {t_cov}%"
-            with st.expander(label, expanded=False):
-                mc1, mc2, mc3, mc4 = st.columns(4)
-                mc1.metric("Total Accounts",  t_total)
-                mc2.metric("With Policy",     t_with)
-                mc3.metric("Without Policy",  t_without)
-                mc4.metric("Coverage",        f"{t_cov}%")
+            r1, r2, r3, r4, r5, r6 = st.columns([5, 3, 2, 2, 2, 2])
+            with r1:
+                arrow = "▼" if st.session_state[exp_key] else "▶"
+                if st.button(f"{arrow} {cov_icon}  {sub_name}", key=f"_btn_{sub_name}", use_container_width=True):
+                    st.session_state[exp_key] = not st.session_state[exp_key]
+            r3.markdown(f"<div style='padding-top:6px;font-weight:700;color:#e0e6f0'>{t_total}</div>", unsafe_allow_html=True)
+            r4.markdown(f"<div style='padding-top:6px;font-weight:700;color:#2ecc71'>{t_with}</div>", unsafe_allow_html=True)
+            r5.markdown(f"<div style='padding-top:6px;font-weight:700;color:#e74c3c'>{t_without}</div>", unsafe_allow_html=True)
+            r6.markdown(f"<div style='padding-top:6px;font-weight:700;color:{cov_color}'>{t_cov}%</div>", unsafe_allow_html=True)
 
-                acct_rows = []
-                for _, row in grp.iterrows():
-                    acct_nm      = row.get(acct_name_col, "—")
-                    policy_disp  = row.get(policy_col, "") if policy_col else ""
-                    policy_disp  = policy_disp if policy_disp and str(policy_disp).strip() not in ("", "nan", "None") else ("Implemented" if row["HasPolicy"] else "Not Implemented")
-                    status       = "✅ Implemented" if row["HasPolicy"] else "❌ Not Implemented"
-                    acct_rows.append({"Storage Account": acct_nm, "PolicyDisplay": policy_disp, "Status": status})
-
-                if acct_rows:
-                    st.dataframe(pd.DataFrame(acct_rows), use_container_width=True, hide_index=True)
+            if st.session_state[exp_key]:
+                with st.container():
+                    acct_rows = []
+                    for _, row in grp.iterrows():
+                        acct_nm      = row.get(acct_name_col, "—")
+                        policy_disp  = row.get(policy_col, "") if policy_col else ""
+                        policy_disp  = policy_disp if policy_disp and str(policy_disp).strip() not in ("", "nan", "None") else ("Implemented" if row["HasPolicy"] else "Not Implemented")
+                        status       = "✅ Implemented" if row["HasPolicy"] else "❌ Not Implemented"
+                        acct_rows.append({"Storage Account": acct_nm, "Policy": policy_disp, "Status": status})
+                    if acct_rows:
+                        st.dataframe(pd.DataFrame(acct_rows), use_container_width=True, hide_index=True)
         else:
-            sub_row = subs_df[subs_df[sub_name_col] == sub_name] if not subs_df.empty else pd.DataFrame()
-            t_cov   = float(sub_row["CoveragePct"].values[0]) if not sub_row.empty else 0
+            sub_row  = subs_df[subs_df[sub_name_col] == sub_name] if not subs_df.empty else pd.DataFrame()
+            t_cov    = float(sub_row["CoveragePct"].values[0]) if not sub_row.empty else 0
             cov_icon = "🟢" if t_cov >= 75 else ("🟡" if t_cov >= 50 else "🔴")
-            with st.expander(f"{cov_icon} {sub_name}  —  Coverage: {t_cov}%", expanded=False):
-                st.caption("No storage accounts matched current filters for this subscription.")
+            r1, _, _, _, _, r6 = st.columns([5, 3, 2, 2, 2, 2])
+            r1.markdown(f"<div style='padding-top:6px;color:#8899bb'>&nbsp;&nbsp;{cov_icon} {sub_name}</div>", unsafe_allow_html=True)
+            r6.markdown(f"<div style='padding-top:6px;color:#8899bb'>{t_cov}%</div>", unsafe_allow_html=True)
+
+        st.markdown("<hr style='margin:2px 0;opacity:0.15;border-color:#1e2d4a;'>", unsafe_allow_html=True)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown(f"""
