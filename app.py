@@ -242,50 +242,79 @@ with k4:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
+# ── Filter panel CSS ──────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* Filter panel container */
+.filter-panel {
+    background:#131929; border-radius:10px;
+    padding:14px 22px; margin-bottom:18px;
+    border:1px solid #1e2d4a;
+    display:flex; align-items:center; gap:32px; flex-wrap:wrap;
+}
+.filter-group { display:flex; align-items:center; gap:10px; }
+.filter-tag {
+    font-size:0.68rem; font-weight:700; color:#6a7a99;
+    text-transform:uppercase; letter-spacing:.09em; white-space:nowrap;
+}
+
+/* Radio pill buttons */
+div[data-testid="stRadio"] { margin:0 !important; }
+div[data-testid="stRadio"] > label { display:none; }
+div[data-testid="stRadio"] > div {
+    display:flex !important; flex-direction:row !important;
+    gap:6px !important; flex-wrap:nowrap !important;
+}
+div[data-testid="stRadio"] div[data-testid="stMarkdownContainer"] { display:none; }
+div[data-testid="stRadio"] label[data-baseweb="radio"] {
+    background:#0d1226 !important; border-radius:20px !important;
+    padding:5px 16px !important; border:1.5px solid #2a3a55 !important;
+    cursor:pointer !important; margin:0 !important;
+}
+div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) {
+    background:#1565c0 !important; border-color:#1565c0 !important;
+}
+div[data-testid="stRadio"] label[data-baseweb="radio"] span[data-testid="stMarkdownContainer"] p {
+    font-size:0.77rem !important; font-weight:600 !important; color:#a0b8d8 !important;
+}
+div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) span[data-testid="stMarkdownContainer"] p {
+    color:#ffffff !important;
+}
+/* Hide the radio circle dot */
+div[data-testid="stRadio"] div[role="radiogroup"] svg { display:none !important; }
+div[data-testid="stRadio"] div[role="radiogroup"] div[data-testid="stWidgetLabel"] { display:none !important; }
+</style>
+""", unsafe_allow_html=True)
+
 # ── Filters ───────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-label">Filters</div>', unsafe_allow_html=True)
-fc1, fc2, fc3, fc4 = st.columns([3, 3, 3, 2])
+fp1, fp2, fp3, fp4, fp5 = st.columns([2, 4, 1, 4, 2])
 
-with fc1:
-    st.caption("SUBSCRIPTION NAME")
+with fp1:
+    st.markdown('<p class="filter-tag">Subscription</p>', unsafe_allow_html=True)
+
+with fp2:
     sub_options = sorted(accts_df[display_sub_col].dropna().unique().tolist()) if (not accts_df.empty and display_sub_col) else []
-    sel_subs    = st.multiselect("", sub_options, label_visibility="collapsed", key="sub_filter", placeholder="Filter by subscription name...")
+    sel_subs    = st.multiselect("", sub_options, label_visibility="collapsed",
+                                 key="sub_filter", placeholder="Filter by subscription name...")
 
-with fc2:
-    st.caption("STORAGE ACCOUNT NAME")
-    acct_options = sorted(accts_df[acct_name_col].dropna().unique().tolist()) if not accts_df.empty else []
-    sel_accts    = st.multiselect("", acct_options, label_visibility="collapsed", key="acct_filter", placeholder="Filter by account name...")
+with fp3:
+    st.markdown('<p class="filter-tag">Policy Status</p>', unsafe_allow_html=True)
 
-with fc3:
-    st.caption("POLICY STATUS")
-    b1, b2, b3 = st.columns(3)
-    if "policy_filter" not in st.session_state:
-        st.session_state["policy_filter"] = "All"
-    pf = st.session_state.get("policy_filter", "All")
-    with b1:
-        active_all  = "background:#1565c0 !important;color:#fff !important;border-color:#1565c0 !important;" if pf == "All" else ""
-        st.markdown(f"<style>#btn_all button{{  {active_all} }}</style>", unsafe_allow_html=True)
-        if st.button("All",                key="f_all"):  st.session_state["policy_filter"] = "All";  st.rerun()
-    with b2:
-        active_impl = "background:#1e8e3e !important;color:#fff !important;border-color:#1e8e3e !important;" if pf == "Implemented" else ""
-        st.markdown(f"<style>#btn_impl button{{ {active_impl} }}</style>", unsafe_allow_html=True)
-        if st.button("✅ Implemented",     key="f_impl"): st.session_state["policy_filter"] = "Implemented"; st.rerun()
-    with b3:
-        active_not  = "background:#c62828 !important;color:#fff !important;border-color:#c62828 !important;" if pf == "Not Implemented" else ""
-        st.markdown(f"<style>#btn_not button{{  {active_not} }}</style>", unsafe_allow_html=True)
-        if st.button("❌ Not Implemented", key="f_not"):  st.session_state["policy_filter"] = "Not Implemented"; st.rerun()
+with fp4:
+    pf = st.radio(
+        "", ["All", "✓ Implemented", "✗ Not Implemented"],
+        horizontal=True, label_visibility="collapsed", key="policy_radio"
+    )
 
-with fc4:
-    st.caption(" ")
+with fp5:
     csv_all = accts_df.to_csv(index=False).encode() if not accts_df.empty else b""
-    st.download_button("⬇ Export All CSV", csv_all, "storage_lifecycle.csv", "text/csv", key="exp_all")
+    st.download_button("⬇ Export Filtered CSV", csv_all, "storage_lifecycle.csv", "text/csv", key="exp_all")
 
-# Active filter indicator
-pf = st.session_state.get("policy_filter", "All")
-if pf == "Implemented":
-    st.markdown('<div style="display:inline-block;background:#1e8e3e;color:#fff;border-radius:12px;padding:3px 14px;font-size:0.75rem;font-weight:600;margin-bottom:8px;">● Showing: ✅ Implemented only</div>', unsafe_allow_html=True)
-elif pf == "Not Implemented":
-    st.markdown('<div style="display:inline-block;background:#c62828;color:#fff;border-radius:12px;padding:3px 14px;font-size:0.75rem;font-weight:600;margin-bottom:8px;">● Showing: ❌ Not Implemented only</div>', unsafe_allow_html=True)
+# Active filter badge
+if pf == "✓ Implemented":
+    st.markdown('<span style="display:inline-block;background:#1e8e3e;color:#fff;border-radius:12px;padding:2px 12px;font-size:0.72rem;font-weight:600;">● Showing: ✓ Implemented only</span>', unsafe_allow_html=True)
+elif pf == "✗ Not Implemented":
+    st.markdown('<span style="display:inline-block;background:#c62828;color:#fff;border-radius:12px;padding:2px 12px;font-size:0.72rem;font-weight:600;">● Showing: ✗ Not Implemented only</span>', unsafe_allow_html=True)
 
 # ── Apply filters ─────────────────────────────────────────────────────────────
 filtered = accts_df.copy() if not accts_df.empty else pd.DataFrame()
@@ -293,22 +322,14 @@ filtered = accts_df.copy() if not accts_df.empty else pd.DataFrame()
 if not filtered.empty:
     if sel_subs and display_sub_col:
         filtered = filtered[filtered[display_sub_col].isin(sel_subs)]
-    if sel_accts:
-        filtered = filtered[filtered[acct_name_col].isin(sel_accts)]
-    if pf == "Implemented":
+    if pf == "✓ Implemented":
         filtered = filtered[filtered["HasPolicy"] == True]
-    elif pf == "Not Implemented":
+    elif pf == "✗ Not Implemented":
         filtered = filtered[filtered["HasPolicy"] == False]
 
 # ── Subscription Coverage Matrix ──────────────────────────────────────────────
 st.markdown("---")
-hc1, hc2 = st.columns([5, 2])
-with hc1:
-    st.markdown('<div class="section-label">Subscription Coverage Matrix</div>', unsafe_allow_html=True)
-with hc2:
-    if not filtered.empty:
-        csv_filt = filtered.to_csv(index=False).encode()
-        st.download_button("⬇ Export Filtered CSV", csv_filt, "filtered.csv", "text/csv", key="exp_filt")
+st.markdown('<div class="section-label">Subscription Coverage Matrix</div>', unsafe_allow_html=True)
 
 # Build subscription list
 if not filtered.empty and display_sub_col:
