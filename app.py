@@ -325,110 +325,89 @@ if not filtered_accts.empty:
     elif pf == "Not Implemented":
         filtered_accts = filtered_accts[filtered_accts["HasPolicy"] == False]
 
-# ── Build matrix per subscription ────────────────────────────────────────────
-st.markdown('<div class="panel">', unsafe_allow_html=True)
-st.markdown('<div class="panel-title">Subscription Coverage Matrix &nbsp;<span style="font-size:0.72rem;color:#9aabb8;font-weight:400;">▶ click subscription row to expand storage accounts</span></div>', unsafe_allow_html=True)
+# ── Subscription Coverage Matrix ─────────────────────────────────────────────
+st.markdown("---")
+hc1, hc2 = st.columns([4, 2])
+with hc1:
+    st.markdown("### Subscription Coverage Matrix")
+with hc2:
+    if not filtered_accts.empty:
+        csv_filtered = filtered_accts.to_csv(index=False).encode()
+        st.download_button("⬇ Export Filtered CSV", csv_filtered, "storage_lifecycle_filtered.csv", "text/csv", key="exp_filt")
 
-# Export filtered
-if not filtered_accts.empty:
-    csv_filtered = filtered_accts.to_csv(index=False).encode()
-    st.download_button("⬇ Export Filtered CSV", csv_filtered, "storage_lifecycle_filtered.csv", "text/csv", key="exp_filt")
-
-# Group by subscription
+# Group accounts by subscription
 if not filtered_accts.empty and acct_sub_col:
     sub_groups = filtered_accts.groupby(acct_sub_col)
-    sub_list = sorted(filtered_accts[acct_sub_col].dropna().unique().tolist())
+    sub_list   = sorted(filtered_accts[acct_sub_col].dropna().unique().tolist())
 else:
     sub_groups = None
-    sub_list   = subs_df[sub_name_col].tolist() if not subs_df.empty else []
+    sub_list   = subs_df[sub_name_col].dropna().tolist() if not subs_df.empty else []
 
-# Build HTML matrix
-rows_html = ""
-for sub_name in sub_list:
-    if sub_groups and sub_name in sub_groups.groups:
-        grp        = sub_groups.get_group(sub_name)
-        t_total    = len(grp)
-        t_with     = int(grp["HasPolicy"].sum())
-        t_without  = t_total - t_with
-        t_cov      = round(t_with / t_total * 100, 1) if t_total else 0
-        cc         = cov_class(t_cov)
+# Apply subscription name search filter to sub_list
+if sub_search:
+    sub_list = [s for s in sub_list if sub_search.lower() in str(s).lower()]
 
-        # child rows
-        child_rows = ""
-        for _, row in grp.iterrows():
-            acct_nm  = row.get(acct_name_col, "—")
-            pol_name = row.get(policy_col, "—") if policy_col else ("Implemented" if row["HasPolicy"] else "Not Set")
-            pill     = f'<span class="pill-yes">✓ {pol_name}</span>' if row["HasPolicy"] else f'<span class="pill-no">✗ {pol_name}</span>'
-            child_rows += f"""
-            <tr class="sub-row">
-                <td style="padding-left:36px;color:#3a4a68;">{acct_nm}</td>
-                <td>{pill}</td>
-                <td class="num">—</td>
-                <td class="num">—</td>
-                <td class="num">—</td>
-                <td class="num">—</td>
-            </tr>"""
+if not sub_list:
+    st.info("No subscriptions match the current filters.")
+else:
+    # Column header row
+    h1, h2, h3, h4, h5 = st.columns([5, 3, 2, 2, 2])
+    h1.markdown("<span style='font-size:0.72rem;font-weight:700;color:#7a8fa6;text-transform:uppercase;letter-spacing:.06em;'>Subscription / Storage Account</span>", unsafe_allow_html=True)
+    h2.markdown("<span style='font-size:0.72rem;font-weight:700;color:#7a8fa6;text-transform:uppercase;letter-spacing:.06em;'>Policy Name</span>", unsafe_allow_html=True)
+    h3.markdown("<span style='font-size:0.72rem;font-weight:700;color:#7a8fa6;text-transform:uppercase;letter-spacing:.06em;'>Total</span>", unsafe_allow_html=True)
+    h4.markdown("<span style='font-size:0.72rem;font-weight:700;color:#7a8fa6;text-transform:uppercase;letter-spacing:.06em;'>With Policy</span>", unsafe_allow_html=True)
+    h5.markdown("<span style='font-size:0.72rem;font-weight:700;color:#7a8fa6;text-transform:uppercase;letter-spacing:.06em;'>Coverage %</span>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin:4px 0 8px 0;border-color:#dde4ef;'>", unsafe_allow_html=True)
 
-        rows_html += f"""
-        <tr>
-          <td colspan="6" style="padding:0;border:none;">
-            <details>
-              <summary style="display:table;width:100%;list-style:none;">
-                <table style="width:100%;border-collapse:collapse;">
-                  <tr class="sub-header">
-                    <td style="padding:11px 14px;color:#1e2d4a;font-weight:600;width:35%;">
-                      <span class="arrow">▶</span>{sub_name}
-                    </td>
-                    <td style="padding:11px 14px;color:#5a6a88;width:20%;">—</td>
-                    <td class="num" style="padding:11px 14px;color:#1e2d4a;font-weight:600;">{t_total}</td>
-                    <td class="num" style="padding:11px 14px;color:#1e8e3e;font-weight:600;">{t_with}</td>
-                    <td class="num" style="padding:11px 14px;color:#d93025;font-weight:600;">{t_without}</td>
-                    <td class="num {cc}" style="padding:11px 14px;">{t_cov}%</td>
-                  </tr>
-                </table>
-              </summary>
-              <table style="width:100%;border-collapse:collapse;">
-                {child_rows}
-              </table>
-            </details>
-          </td>
-        </tr>"""
-    else:
-        # subscription from subs_df with no matched accounts
-        sub_row = subs_df[subs_df[sub_name_col] == sub_name]
-        t_cov   = float(sub_row["CoveragePct"].values[0]) if not sub_row.empty else 0
-        cc      = cov_class(t_cov)
-        rows_html += f"""
-        <tr class="sub-header">
-            <td style="padding:11px 14px;color:#1e2d4a;font-weight:600;">{sub_name}</td>
-            <td style="padding:11px 14px;color:#5a6a88;">—</td>
-            <td class="num" style="padding:11px 14px;">—</td>
-            <td class="num" style="padding:11px 14px;">—</td>
-            <td class="num" style="padding:11px 14px;">—</td>
-            <td class="num {cc}" style="padding:11px 14px;">{t_cov}%</td>
-        </tr>"""
+    for sub_name in sub_list:
+        if sub_groups and sub_name in sub_groups.groups:
+            grp       = sub_groups.get_group(sub_name)
+            t_total   = len(grp)
+            t_with    = int(grp["HasPolicy"].sum())
+            t_without = t_total - t_with
+            t_cov     = round(t_with / t_total * 100, 1) if t_total else 0
 
-table_html = f"""
-<div style="overflow-x:auto;">
-<table class="matrix-table">
-  <thead>
-    <tr>
-      <th style="width:35%;">Subscription Name / Storage Account</th>
-      <th>Policy Name</th>
-      <th class="num">Total Accounts</th>
-      <th class="num">With Policy</th>
-      <th class="num">Without Policy</th>
-      <th class="num">Coverage %</th>
-    </tr>
-  </thead>
-  <tbody>
-    {rows_html if rows_html else '<tr><td colspan="6" style="text-align:center;padding:24px;color:#9aabb8;">No data matches the current filters</td></tr>'}
-  </tbody>
-</table>
-</div>
-"""
-st.markdown(table_html, unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+            cov_color = "#1e8e3e" if t_cov >= 75 else ("#e37400" if t_cov >= 50 else "#d93025")
+            label = (
+                f"**{sub_name}** &nbsp;&nbsp; "
+                f"<span style='color:#5a6a88;font-size:0.8rem;'>"
+                f"Total: {t_total} &nbsp;|&nbsp; "
+                f"<span style='color:#1e8e3e;'>✓ {t_with}</span> &nbsp;|&nbsp; "
+                f"<span style='color:#d93025;'>✗ {t_without}</span> &nbsp;|&nbsp; "
+                f"<span style='color:{cov_color};font-weight:700;'>{t_cov}%</span>"
+                f"</span>"
+            )
+
+            with st.expander(sub_name, expanded=False):
+                # Summary bar inside expander
+                sc1, sc2, sc3, sc4 = st.columns(4)
+                sc1.metric("Total Accounts", t_total)
+                sc2.metric("With Policy",    t_with)
+                sc3.metric("Without Policy", t_without)
+                sc4.metric("Coverage",       f"{t_cov}%")
+
+                # Individual accounts table
+                acct_rows = []
+                for _, row in grp.iterrows():
+                    acct_nm  = row.get(acct_name_col, "—")
+                    pol_name = (row.get(policy_col, "") if policy_col else "") or ("Implemented" if row["HasPolicy"] else "Not Set")
+                    status   = "✓ Implemented" if row["HasPolicy"] else "✗ Not Set"
+                    acct_rows.append({
+                        "Storage Account": acct_nm,
+                        "Policy Name":     pol_name,
+                        "Status":          status,
+                    })
+
+                if acct_rows:
+                    acct_df_display = pd.DataFrame(acct_rows)
+                    st.dataframe(acct_df_display, use_container_width=True, hide_index=True)
+        else:
+            # Subscription only in subs_df (no accounts matched)
+            sub_row = subs_df[subs_df[sub_name_col] == sub_name] if not subs_df.empty else pd.DataFrame()
+            t_cov   = float(sub_row["CoveragePct"].values[0]) if not sub_row.empty else 0
+            cov_color = "#1e8e3e" if t_cov >= 75 else ("#e37400" if t_cov >= 50 else "#d93025")
+            with st.expander(f"{sub_name}  —  Coverage: {t_cov}%", expanded=False):
+                st.caption("No storage accounts matched current filters for this subscription.")
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 covered   = with_policy
