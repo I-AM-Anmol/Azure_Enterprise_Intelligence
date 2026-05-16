@@ -20,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-st_autorefresh(interval=300000, silent=True)
+st_autorefresh(interval=300000)
 
 st.markdown("""
 <style>
