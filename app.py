@@ -22,112 +22,71 @@ st.set_page_config(
 
 st_autorefresh(interval=300000)
 
-# ── CSS: scoped styles only — no global text color override ──────────────────
+# ── CSS: dark theme overrides ─────────────────────────────────────────────────
 st.markdown("""
 <style>
-/* Hide default Streamlit chrome */
 #MainMenu, footer, [data-testid="stToolbar"] { display:none !important; }
-
-/* Page background */
-[data-testid="stAppViewContainer"] { background:#f0f4f8 !important; }
-[data-testid="stHeader"]           { background:#1e2d4a !important; }
 
 /* Top banner */
 .top-banner {
-    background:linear-gradient(135deg,#1e2d4a 0%,#2a4070 100%);
-    border-radius:12px; padding:20px 28px 16px 28px;
-    margin-bottom:20px;
+    background:linear-gradient(135deg,#0d1b3e 0%,#1a3060 100%);
+    border-radius:12px; padding:20px 28px 16px 28px; margin-bottom:20px;
+    border:1px solid #1e3a6e;
 }
-.top-banner .dash-title {
-    font-size:1.55rem; font-weight:700; color:#ffffff !important;
-    line-height:1.3;
-}
-.top-banner .dash-title span { color:#60b4ff !important; }
-.top-banner .dash-meta {
-    display:flex; gap:18px; flex-wrap:wrap; margin-top:6px;
-}
-.top-banner .dash-meta .m {
-    font-size:0.73rem; color:#a0c0e8 !important;
-}
-.top-banner .dash-meta .m::before { content:"● "; color:#60b4ff; }
+.top-banner .dash-title { font-size:1.55rem; font-weight:700; color:#ffffff; line-height:1.3; }
+.top-banner .dash-title span { color:#60b4ff; }
+.top-banner .dash-meta { display:flex; gap:18px; flex-wrap:wrap; margin-top:6px; }
+.top-banner .dash-meta .m { font-size:0.73rem; color:#7aa8d8; }
+.top-banner .dash-meta .m::before { content:"● "; color:#4da6ff; }
 
 /* KPI cards */
 .kpi-card {
-    background:#ffffff; border-radius:10px;
-    padding:18px 20px; border-top:4px solid #0078d4;
-    box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    background:#131929; border-radius:10px;
+    padding:18px 20px; border-top:4px solid #4da6ff;
+    border-left:1px solid #1e2d4a; border-right:1px solid #1e2d4a; border-bottom:1px solid #1e2d4a;
 }
-.kpi-card.green { border-top-color:#1e8e3e; }
-.kpi-card.red   { border-top-color:#d93025; }
-.kpi-icon       { font-size:1.4rem; margin-bottom:4px; }
-.kpi-value      { font-size:2.2rem; font-weight:700; color:#1e2d4a !important; line-height:1.1; }
-.kpi-value.green { color:#1e8e3e !important; }
-.kpi-value.red   { color:#d93025 !important; }
-.kpi-label {
-    font-size:0.75rem; font-weight:700; color:#5a6a88 !important;
-    text-transform:uppercase; letter-spacing:.06em;
-}
-.kpi-sub { font-size:0.71rem; color:#9aabb8 !important; margin-top:2px; }
+.kpi-card.green { border-top-color:#2ecc71; }
+.kpi-card.red   { border-top-color:#e74c3c; }
+.kpi-icon  { font-size:1.4rem; margin-bottom:4px; }
+.kpi-value { font-size:2.2rem; font-weight:700; color:#ffffff; line-height:1.1; }
+.kpi-value.green { color:#2ecc71; }
+.kpi-value.red   { color:#e74c3c; }
+.kpi-label { font-size:0.75rem; font-weight:700; color:#8899bb; text-transform:uppercase; letter-spacing:.06em; }
+.kpi-sub   { font-size:0.71rem; color:#4a5a78; margin-top:2px; }
 
-/* Section divider label */
+/* Section label */
 .section-label {
-    font-size:0.95rem; font-weight:700; color:#1e2d4a !important;
+    font-size:0.95rem; font-weight:700; color:#c0d0e8;
     margin:18px 0 10px 0; padding-bottom:6px;
-    border-bottom:2px solid #dde4ef;
+    border-bottom:2px solid #1e2d4a;
 }
 
-/* Column header row */
-.col-header {
-    font-size:0.7rem; font-weight:700; color:#7a8fa6 !important;
-    text-transform:uppercase; letter-spacing:.07em;
-}
-
-/* Download buttons */
+/* Buttons */
 .stDownloadButton > button {
-    background:#0078d4 !important; color:#fff !important;
+    background:#1565c0 !important; color:#fff !important;
     border:none !important; border-radius:6px !important;
-    font-size:0.78rem !important; padding:7px 18px !important;
-    font-weight:600 !important;
+    font-size:0.78rem !important; padding:7px 18px !important; font-weight:600 !important;
 }
-.stDownloadButton > button:hover { background:#106ebe !important; }
+.stDownloadButton > button:hover { background:#1976d2 !important; }
 
-/* Filter toggle buttons */
 .stButton > button {
     border-radius:20px !important; font-size:0.77rem !important;
-    padding:5px 16px !important; border:1.5px solid #c0cfe0 !important;
-    background:#ffffff !important; color:#1e2d4a !important;
-    font-weight:600 !important;
+    padding:5px 16px !important; border:1.5px solid #2a3a55 !important;
+    background:#0d1226 !important; color:#a0b8d8 !important; font-weight:600 !important;
 }
-.stButton > button:hover {
-    background:#e8f0fb !important; color:#0078d4 !important;
-    border-color:#0078d4 !important;
-}
+.stButton > button:hover { background:#1a2a45 !important; color:#4da6ff !important; border-color:#4da6ff !important; }
 
-/* Expander styling */
+/* Expander */
 [data-testid="stExpander"] {
-    background:#ffffff !important; border-radius:8px !important;
-    border:1px solid #dde4ef !important; margin-bottom:4px !important;
+    background:#131929 !important; border-radius:8px !important;
+    border:1px solid #1e2d4a !important; margin-bottom:4px !important;
 }
-[data-testid="stExpander"] summary {
-    color:#1e2d4a !important; font-weight:600 !important;
-}
-
-/* Metric inside expander */
-[data-testid="stMetric"] label { color:#5a6a88 !important; font-size:0.75rem !important; }
-[data-testid="stMetricValue"] { color:#1e2d4a !important; font-size:1.4rem !important; }
-
-/* Dataframe */
-[data-testid="stDataFrame"] thead th {
-    background:#f0f4f8 !important; color:#5a6a88 !important;
-    font-size:0.72rem !important; text-transform:uppercase !important;
-}
-[data-testid="stDataFrame"] tbody td { color:#1e2d4a !important; font-size:0.82rem !important; }
 
 /* Footer */
 .dash-footer {
-    font-size:0.7rem; color:#9aabb8 !important;
+    font-size:0.7rem; color:#4a5a78;
     margin-top:24px; padding-top:10px;
-    border-top:1px solid #dde4ef;
+    border-top:1px solid #1e2d4a;
     display:flex; justify-content:space-between;
 }
 </style>
@@ -210,7 +169,9 @@ acct_name_col = next((c for c in accts_df.columns if "account" in c.lower() and 
                 next((c for c in accts_df.columns if "name" in c.lower()), accts_df.columns[0] if not accts_df.empty else "AccountName")
 acct_sub_id_col = next((c for c in accts_df.columns if "subscription" in c.lower() and "id" in c.lower()), None) or \
                   next((c for c in accts_df.columns if "subscription" in c.lower()), None)
-policy_col    = next((c for c in accts_df.columns if "policy" in c.lower() and "name" in c.lower()), None)
+policy_col    = next((c for c in accts_df.columns if "policydisplay" in c.lower()), None) or \
+                next((c for c in accts_df.columns if "policy" in c.lower() and "display" in c.lower()), None) or \
+                next((c for c in accts_df.columns if "policy" in c.lower() and "name" in c.lower()), None)
 
 # ── Build SubscriptionName lookup and add to accts_df ────────────────────────
 # Map SubscriptionId → SubscriptionName so matrix shows names not GUIDs
@@ -287,7 +248,8 @@ fc1, fc2, fc3, fc4 = st.columns([3, 3, 3, 2])
 
 with fc1:
     st.caption("SUBSCRIPTION NAME")
-    sub_search = st.text_input("", placeholder="Search subscription name...", label_visibility="collapsed", key="sub_search")
+    sub_options = sorted(accts_df[display_sub_col].dropna().unique().tolist()) if (not accts_df.empty and display_sub_col) else []
+    sel_subs    = st.multiselect("", sub_options, label_visibility="collapsed", key="sub_filter", placeholder="Filter by subscription name...")
 
 with fc2:
     st.caption("STORAGE ACCOUNT NAME")
@@ -299,27 +261,40 @@ with fc3:
     b1, b2, b3 = st.columns(3)
     if "policy_filter" not in st.session_state:
         st.session_state["policy_filter"] = "All"
+    pf = st.session_state.get("policy_filter", "All")
     with b1:
-        if st.button("All",               key="f_all"):  st.session_state["policy_filter"] = "All"
+        active_all  = "background:#1565c0 !important;color:#fff !important;border-color:#1565c0 !important;" if pf == "All" else ""
+        st.markdown(f"<style>#btn_all button{{  {active_all} }}</style>", unsafe_allow_html=True)
+        if st.button("All",                key="f_all"):  st.session_state["policy_filter"] = "All";  st.rerun()
     with b2:
-        if st.button("✓ Implemented",     key="f_impl"): st.session_state["policy_filter"] = "Implemented"
+        active_impl = "background:#1e8e3e !important;color:#fff !important;border-color:#1e8e3e !important;" if pf == "Implemented" else ""
+        st.markdown(f"<style>#btn_impl button{{ {active_impl} }}</style>", unsafe_allow_html=True)
+        if st.button("✅ Implemented",     key="f_impl"): st.session_state["policy_filter"] = "Implemented"; st.rerun()
     with b3:
-        if st.button("✗ Not Implemented", key="f_not"):  st.session_state["policy_filter"] = "Not Implemented"
+        active_not  = "background:#c62828 !important;color:#fff !important;border-color:#c62828 !important;" if pf == "Not Implemented" else ""
+        st.markdown(f"<style>#btn_not button{{  {active_not} }}</style>", unsafe_allow_html=True)
+        if st.button("❌ Not Implemented", key="f_not"):  st.session_state["policy_filter"] = "Not Implemented"; st.rerun()
 
 with fc4:
     st.caption(" ")
     csv_all = accts_df.to_csv(index=False).encode() if not accts_df.empty else b""
     st.download_button("⬇ Export All CSV", csv_all, "storage_lifecycle.csv", "text/csv", key="exp_all")
 
+# Active filter indicator
+pf = st.session_state.get("policy_filter", "All")
+if pf == "Implemented":
+    st.markdown('<div style="display:inline-block;background:#1e8e3e;color:#fff;border-radius:12px;padding:3px 14px;font-size:0.75rem;font-weight:600;margin-bottom:8px;">● Showing: ✅ Implemented only</div>', unsafe_allow_html=True)
+elif pf == "Not Implemented":
+    st.markdown('<div style="display:inline-block;background:#c62828;color:#fff;border-radius:12px;padding:3px 14px;font-size:0.75rem;font-weight:600;margin-bottom:8px;">● Showing: ❌ Not Implemented only</div>', unsafe_allow_html=True)
+
 # ── Apply filters ─────────────────────────────────────────────────────────────
 filtered = accts_df.copy() if not accts_df.empty else pd.DataFrame()
 
 if not filtered.empty:
-    if sub_search and display_sub_col:
-        filtered = filtered[filtered[display_sub_col].str.contains(sub_search, case=False, na=False)]
+    if sel_subs and display_sub_col:
+        filtered = filtered[filtered[display_sub_col].isin(sel_subs)]
     if sel_accts:
         filtered = filtered[filtered[acct_name_col].isin(sel_accts)]
-    pf = st.session_state.get("policy_filter", "All")
     if pf == "Implemented":
         filtered = filtered[filtered["HasPolicy"] == True]
     elif pf == "Not Implemented":
@@ -343,9 +318,6 @@ else:
     sub_groups = None
     sub_list   = subs_df[sub_name_col].dropna().tolist() if not subs_df.empty else []
 
-if sub_search and not (not filtered.empty and display_sub_col):
-    sub_list = [s for s in sub_list if sub_search.lower() in str(s).lower()]
-
 if not sub_list:
     st.info("No subscriptions match the current filters.")
 else:
@@ -367,7 +339,7 @@ else:
             t_cov     = round(t_with / t_total * 100, 1) if t_total else 0
             cov_icon  = "🟢" if t_cov >= 75 else ("🟡" if t_cov >= 50 else "🔴")
 
-            label = f"{cov_icon} {sub_name}  —  {t_total} accounts · ✓ {t_with} · ✗ {t_without} · {t_cov}%"
+            label = f"{cov_icon} {sub_name}  —  {t_total} accounts · ✅ {t_with} · ❌ {t_without} · {t_cov}%"
             with st.expander(label, expanded=False):
                 mc1, mc2, mc3, mc4 = st.columns(4)
                 mc1.metric("Total Accounts",  t_total)
@@ -377,10 +349,11 @@ else:
 
                 acct_rows = []
                 for _, row in grp.iterrows():
-                    acct_nm  = row.get(acct_name_col, "—")
-                    pol_name = (row.get(policy_col, "") if policy_col else "") or ("Implemented" if row["HasPolicy"] else "Not Set")
-                    status   = "✓ Implemented" if row["HasPolicy"] else "✗ Not Set"
-                    acct_rows.append({"Storage Account": acct_nm, "Policy Name": pol_name, "Status": status})
+                    acct_nm      = row.get(acct_name_col, "—")
+                    policy_disp  = row.get(policy_col, "") if policy_col else ""
+                    policy_disp  = policy_disp if policy_disp and str(policy_disp).strip() not in ("", "nan", "None") else ("Implemented" if row["HasPolicy"] else "Not Implemented")
+                    status       = "✅ Implemented" if row["HasPolicy"] else "❌ Not Implemented"
+                    acct_rows.append({"Storage Account": acct_nm, "PolicyDisplay": policy_disp, "Status": status})
 
                 if acct_rows:
                     st.dataframe(pd.DataFrame(acct_rows), use_container_width=True, hide_index=True)
