@@ -42,7 +42,7 @@ st.markdown("""
 
 st.markdown("""
 <div class="landing-banner">
-  <div class="landing-title">Azure BI Dashboards &mdash; <span>MedInsight</span></div>
+  <div class="landing-title">Azure FinOps Command Center &mdash; <span>MedInsight</span></div>
   <div class="landing-sub">MedInsight Production Tenant &nbsp;·&nbsp; Select a dashboard from the sidebar or below</div>
 </div>
 """, unsafe_allow_html=True)
