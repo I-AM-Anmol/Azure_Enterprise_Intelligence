@@ -10,7 +10,7 @@ from streamlit_autorefresh import st_autorefresh
 # ── Configuration ─────────────────────────────────────────────────────────────
 TENANT_ID    = "e240d61e-61e3-4c9e-ab90-8644b2f4d2a9"
 WORKSPACE_ID = "eca3c81e-a968-42a5-899f-d8fc1a45ebec"
-DATASET_ID   = "996652af-b657-4a6e-92a2-82ed2898fc36"
+DATASET_ID   = "56e6e1c3-8b70-4c53-b288-331041ce1f3f"
 CLIENT_ID    = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
 AUTHORITY    = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPES       = ["https://analysis.windows.net/powerbi/api/.default"]
