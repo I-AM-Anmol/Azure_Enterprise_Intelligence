@@ -17,20 +17,12 @@ section[data-testid="stSidebar"] {
     min-width: 220px !important;
 }
 
-/* Sidebar expand button (shown when sidebar is collapsed) */
+/* Hide the collapse button — sidebar always stays open */
+[data-testid="stSidebarCollapseButton"] {
+    display: none !important;
+}
 [data-testid="collapsedControl"] {
-    background-color: #1e2a4a !important;
-    border-radius: 0 8px 8px 0 !important;
-    border: 1px solid #2d3249 !important;
-    border-left: none !important;
-    color: #60b4ff !important;
-}
-[data-testid="collapsedControl"]:hover {
-    background-color: #253460 !important;
-}
-[data-testid="collapsedControl"] svg {
-    fill: #60b4ff !important;
-    stroke: #60b4ff !important;
+    display: none !important;
 }
 
 /* Nav links in sidebar */
