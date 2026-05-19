@@ -14,12 +14,6 @@ AUTHORITY    = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPES       = ["https://analysis.windows.net/powerbi/api/.default"]
 TENANT_NAME  = "MedInsight Production Tenant"
 
-st.set_page_config(
-    page_title="Azure Storage Lifecycle Policy Coverage",
-    layout="wide",
-    initial_sidebar_state="auto",
-)
-
 st_autorefresh(interval=300000)
 
 # ── CSS: dark theme overrides ─────────────────────────────────────────────────
