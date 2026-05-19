@@ -30,7 +30,7 @@ st.markdown("""
 .dash-card-title { font-size: 1.1rem; font-weight: 700; color: #e2e8f0; margin-bottom: 10px; }
 .dash-card-desc { font-size: 0.82rem; color: #64748b; line-height: 1.65; margin-bottom: 16px; }
 
-[data-testid="stPageLink"] a {
+.stButton > button {
     background: #22263a !important;
     border: 1px solid #2d3249 !important;
     border-radius: 8px !important;
@@ -38,12 +38,11 @@ st.markdown("""
     font-size: 0.82rem !important;
     font-weight: 600 !important;
     padding: 9px 16px !important;
-    text-decoration: none !important;
-    display: inline-block !important;
 }
-[data-testid="stPageLink"] a:hover {
+.stButton > button:hover {
     background: #1e2a4a !important;
     border-color: #3b82f6 !important;
+    color: #60b4ff !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -68,7 +67,8 @@ with c1:
   </div>
 </div>
 """, unsafe_allow_html=True)
-    st.page_link("pages/1_Storage_Lifecycle.py", label="Open Storage Lifecycle →", use_container_width=True)
+    if st.button("Open Storage Lifecycle →", use_container_width=True, key="btn_storage"):
+        st.switch_page("pages/1_Storage_Lifecycle.py")
 
 with c2:
     st.markdown("""
@@ -81,4 +81,5 @@ with c2:
   </div>
 </div>
 """, unsafe_allow_html=True)
-    st.page_link("pages/2_Budget_Analysis.py", label="Open Budget Analysis →", use_container_width=True)
+    if st.button("Open Budget Analysis →", use_container_width=True, key="btn_budget"):
+        st.switch_page("pages/2_Budget_Analysis.py")
