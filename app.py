@@ -10,19 +10,29 @@ st.set_page_config(
 # Global styles — applied on every page
 st.markdown("""
 <style>
-/* Sidebar background — distinct from main page */
+/* Sidebar — always visible, force open */
 section[data-testid="stSidebar"] {
     background-color: #0d1226 !important;
-    border-right: 1px solid #1e2d4a !important;
-    min-width: 220px !important;
+    border-right: 2px solid #1e2d4a !important;
+    min-width: 240px !important;
+    transform: translateX(0px) !important;
+    display: block !important;
+    visibility: visible !important;
 }
 
-/* Hide the collapse button — sidebar always stays open */
+/* Hide the collapse arrow inside sidebar — can't be closed */
 [data-testid="stSidebarCollapseButton"] {
     display: none !important;
 }
+
+/* Hide the expand arrow on left edge — sidebar never collapses so not needed */
 [data-testid="collapsedControl"] {
     display: none !important;
+}
+
+/* Push main content right to not overlap sidebar */
+.main .block-container {
+    padding-left: 1rem !important;
 }
 
 /* Nav links in sidebar */
