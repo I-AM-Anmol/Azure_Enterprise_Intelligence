@@ -39,20 +39,18 @@ div[data-testid="stSidebarContent"] {
 div[data-testid="stSidebarNav"]         { order: 2 !important; }
 div[data-testid="stSidebarUserContent"] { order: 1 !important; }
 
-/* ── Logo area — no white box, white logo via CSS filter ──── */
+/* ── Logo area — white logo, no background ──────────────────── */
 .sb-logo-card {
-    padding: 24px 24px 16px 24px;
+    padding: 22px 20px 14px 20px;
     text-align: center;
 }
 .sb-logo-card img {
-    width: 80%;
-    max-width: 210px;
+    width: 88%;
+    max-width: 220px;
     height: auto;
     display: block;
     margin: 0 auto;
-    /* Convert dark-on-white logo → clean white on dark sidebar */
-    filter: brightness(0) invert(1);
-    opacity: 0.92;
+    opacity: 0.95;
 }
 .sb-divider {
     border: none;
