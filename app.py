@@ -1,4 +1,6 @@
 import streamlit as st
+import base64
+from pathlib import Path
 
 st.set_page_config(
     page_title="Azure FinOps Command Center — MedInsight",
@@ -7,53 +9,112 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Embed logo as base64 so it survives deployment without extra HTTP requests
+_logo_path = Path(__file__).parent / "assets" / "milliman_logo.png"
+_logo_b64  = base64.b64encode(_logo_path.read_bytes()).decode() if _logo_path.exists() else None
+
 # Global styles — applied on every page
 st.markdown("""
 <style>
-/* Sidebar — dark panel, always visible, force open */
+/* ── Sidebar container ──────────────────────────────────────── */
 section[data-testid="stSidebar"] {
-    background-color: #0f172a !important;
-    border-right: 2px solid #1e293b !important;
-    min-width: 240px !important;
+    background-color: #1a2744 !important;
+    border-right: 1px solid #2a3f6f !important;
+    min-width: 260px !important;
     transform: translateX(0px) !important;
     display: block !important;
     visibility: visible !important;
 }
+[data-testid="stSidebarCollapseButton"] { display: none !important; }
+[data-testid="collapsedControl"]        { display: none !important; }
 
-/* Hide the collapse arrow inside sidebar — can't be closed */
-[data-testid="stSidebarCollapseButton"] {
-    display: none !important;
+/* Push main content away from sidebar */
+.main .block-container { padding-left: 1rem !important; }
+
+/* ── Reorder sidebar: logo block above nav links ────────────── */
+div[data-testid="stSidebarContent"] {
+    display: flex !important;
+    flex-direction: column !important;
+}
+div[data-testid="stSidebarNav"]         { order: 2 !important; }
+div[data-testid="stSidebarUserContent"] { order: 1 !important; }
+
+/* ── Logo card ──────────────────────────────────────────────── */
+.sb-logo-card {
+    background: #ffffff;
+    border-radius: 10px;
+    margin: 16px 14px 0 14px;
+    padding: 12px 16px 10px 16px;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+.sb-logo-card img {
+    max-height: 46px;
+    width: auto;
+    max-width: 180px;
+    display: block;
+    margin: 0 auto;
+}
+.sb-divider {
+    border: none;
+    border-top: 1px solid #2a3f6f;
+    margin: 14px 14px 4px 14px;
 }
 
-/* Hide the expand arrow on left edge — sidebar never collapses so not needed */
-[data-testid="collapsedControl"] {
-    display: none !important;
-}
-
-/* Push main content right to not overlap sidebar */
-.main .block-container {
-    padding-left: 1rem !important;
-}
-
-/* Nav links in sidebar — light text on dark bg */
+/* ── Nav links ──────────────────────────────────────────────── */
 [data-testid="stSidebarNavLink"] {
     border-radius: 8px !important;
-    color: #94a3b8 !important;
+    color: #e2e8f0 !important;
+    padding: 10px 14px !important;
+    margin: 3px 10px !important;
+    transition: background 0.15s ease !important;
 }
 [data-testid="stSidebarNavLink"]:hover {
-    background-color: #1e293b !important;
+    background-color: #243457 !important;
     color: #93c5fd !important;
 }
 [data-testid="stSidebarNavLink"][aria-current="page"] {
-    background-color: #1e293b !important;
-    color: #60b4ff !important;
+    background-color: #2563eb !important;
+    color: #ffffff !important;
     font-weight: 700 !important;
+    box-shadow: 0 2px 8px rgba(37,99,235,0.4) !important;
 }
 [data-testid="stSidebarNavLinkText"] {
-    font-size: 0.85rem !important;
+    font-size: 0.88rem !important;
+    font-weight: 500 !important;
+    display: block !important;
+    color: inherit !important;
+}
+/* Icon color inherits from parent link */
+[data-testid="stSidebarNavLink"] span,
+[data-testid="stSidebarNavLink"] svg {
+    color: inherit !important;
+}
+
+/* ── Sidebar footer label ───────────────────────────────────── */
+.sb-footer {
+    padding: 14px 16px 8px 16px;
+    font-size: 0.68rem;
+    color: #4a6490;
+    text-align: center;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-top: 1px solid #2a3f6f;
+    margin-top: auto;
 }
 </style>
 """, unsafe_allow_html=True)
+
+# ── Sidebar: logo card + section divider ──────────────────────
+if _logo_b64:
+    with st.sidebar:
+        st.markdown(
+            f'<div class="sb-logo-card">'
+            f'<img src="data:image/png;base64,{_logo_b64}" alt="Milliman MedInsight">'
+            f'</div>'
+            f'<hr class="sb-divider">',
+            unsafe_allow_html=True,
+        )
 
 pg = st.navigation([
     st.Page("pages/0_Home.py",              title="Home",              icon="🏠", default=True),

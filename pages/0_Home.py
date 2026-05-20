@@ -3,7 +3,7 @@ import streamlit as st
 st.markdown("""
 <style>
 #MainMenu, footer, [data-testid="stToolbar"] { display:none !important; }
-section[data-testid="stSidebar"] { transform:translateX(0px) !important; display:block !important; visibility:visible !important; min-width:240px !important; }
+section[data-testid="stSidebar"] { background-color:#1a2744 !important; transform:translateX(0px) !important; display:block !important; visibility:visible !important; min-width:260px !important; }
 [data-testid="stSidebarCollapseButton"] { display:none !important; }
 [data-testid="collapsedControl"] { display:none !important; }
 
