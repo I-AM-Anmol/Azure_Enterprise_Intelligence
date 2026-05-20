@@ -8,37 +8,37 @@ section[data-testid="stSidebar"] { transform:translateX(0px) !important; display
 [data-testid="collapsedControl"] { display:none !important; }
 
 .landing-banner {
-    background: linear-gradient(135deg, #1e2a4a 0%, #0f1117 65%);
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
     border-radius: 12px; padding: 32px 36px 28px 36px; margin-bottom: 32px;
-    border: 1px solid #2d3249;
+    border: 1px solid #bfdbfe;
 }
-.landing-title { font-size: 2rem; font-weight: 700; color: #fff; }
-.landing-title span { color: #60b4ff; }
+.landing-title { font-size: 2rem; font-weight: 700; color: #1e3a8a; }
+.landing-title span { color: #2563eb; }
 .landing-sub { font-size: 0.88rem; color: #64748b; margin-top: 8px; }
 
 .dash-card {
-    background: #1a1d27; border-radius: 12px;
-    padding: 28px 24px 20px 24px; border: 1px solid #2d3249;
-    border-top: 4px solid #3b82f6; height: 100%;
+    background: #ffffff; border-radius: 12px;
+    padding: 28px 24px 20px 24px; border: 1px solid #e2e8f0;
+    border-top: 4px solid #2563eb; height: 100%;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
-.dash-card.green { border-top-color: #22c55e; }
+.dash-card.green { border-top-color: #16a34a; }
 .dash-card-icon { font-size: 2.2rem; margin-bottom: 14px; }
-.dash-card-title { font-size: 1.1rem; font-weight: 700; color: #e2e8f0; margin-bottom: 10px; }
+.dash-card-title { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: 10px; }
 .dash-card-desc { font-size: 0.82rem; color: #64748b; line-height: 1.65; margin-bottom: 16px; }
 
 .stButton > button {
-    background: #22263a !important;
-    border: 1px solid #2d3249 !important;
+    background: #2563eb !important;
+    border: none !important;
     border-radius: 8px !important;
-    color: #60b4ff !important;
+    color: #ffffff !important;
     font-size: 0.82rem !important;
     font-weight: 600 !important;
     padding: 9px 16px !important;
 }
 .stButton > button:hover {
-    background: #1e2a4a !important;
-    border-color: #3b82f6 !important;
-    color: #60b4ff !important;
+    background: #1d4ed8 !important;
+    color: #ffffff !important;
 }
 </style>
 """, unsafe_allow_html=True)

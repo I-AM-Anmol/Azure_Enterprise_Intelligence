@@ -26,65 +26,66 @@ section[data-testid="stSidebar"] { transform:translateX(0px) !important; display
 
 /* Top banner */
 .top-banner {
-    background:linear-gradient(135deg,#0d1b3e 0%,#1a3060 100%);
+    background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);
     border-radius:12px; padding:20px 28px 16px 28px; margin-bottom:20px;
-    border:1px solid #1e3a6e;
+    border:1px solid #bfdbfe;
 }
-.top-banner .dash-title { font-size:1.55rem; font-weight:700; color:#ffffff; line-height:1.3; }
-.top-banner .dash-title span { color:#60b4ff; }
+.top-banner .dash-title { font-size:1.55rem; font-weight:700; color:#1e3a8a; line-height:1.3; }
+.top-banner .dash-title span { color:#2563eb; }
 .top-banner .dash-meta { display:flex; gap:18px; flex-wrap:wrap; margin-top:6px; }
-.top-banner .dash-meta .m { font-size:0.73rem; color:#7aa8d8; }
-.top-banner .dash-meta .m::before { content:"● "; color:#4da6ff; }
+.top-banner .dash-meta .m { font-size:0.73rem; color:#64748b; }
+.top-banner .dash-meta .m::before { content:"● "; color:#2563eb; }
 
 /* KPI cards */
 .kpi-card {
-    background:#131929; border-radius:10px;
-    padding:18px 20px; border-top:4px solid #4da6ff;
-    border-left:1px solid #1e2d4a; border-right:1px solid #1e2d4a; border-bottom:1px solid #1e2d4a;
+    background:#ffffff; border-radius:10px;
+    padding:18px 20px; border-top:4px solid #2563eb;
+    border-left:1px solid #e2e8f0; border-right:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0;
+    box-shadow:0 1px 4px rgba(0,0,0,0.06);
 }
-.kpi-card.green { border-top-color:#2ecc71; }
-.kpi-card.red   { border-top-color:#e74c3c; }
+.kpi-card.green { border-top-color:#16a34a; }
+.kpi-card.red   { border-top-color:#dc2626; }
 .kpi-icon  { font-size:1.4rem; margin-bottom:4px; }
-.kpi-value { font-size:2.2rem; font-weight:700; color:#ffffff; line-height:1.1; }
-.kpi-value.green { color:#2ecc71; }
-.kpi-value.red   { color:#e74c3c; }
-.kpi-label { font-size:0.75rem; font-weight:700; color:#8899bb; text-transform:uppercase; letter-spacing:.06em; }
-.kpi-sub   { font-size:0.71rem; color:#4a5a78; margin-top:2px; }
+.kpi-value { font-size:2.2rem; font-weight:700; color:#0f172a; line-height:1.1; }
+.kpi-value.green { color:#16a34a; }
+.kpi-value.red   { color:#dc2626; }
+.kpi-label { font-size:0.75rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.06em; }
+.kpi-sub   { font-size:0.71rem; color:#94a3b8; margin-top:2px; }
 
 /* Section label */
 .section-label {
-    font-size:0.95rem; font-weight:700; color:#c0d0e8;
+    font-size:0.95rem; font-weight:700; color:#1e293b;
     margin:18px 0 10px 0; padding-bottom:6px;
-    border-bottom:2px solid #1e2d4a;
+    border-bottom:2px solid #e2e8f0;
 }
 
 /* Buttons */
 .stDownloadButton > button {
-    background:#1565c0 !important; color:#fff !important;
+    background:#2563eb !important; color:#fff !important;
     border:none !important; border-radius:6px !important;
     font-size:0.78rem !important; padding:7px 18px !important; font-weight:600 !important;
 }
-.stDownloadButton > button:hover { background:#1976d2 !important; }
+.stDownloadButton > button:hover { background:#1d4ed8 !important; }
 
 .stButton > button {
     border-radius:6px !important; font-size:0.82rem !important;
-    padding:7px 12px !important; border:1px solid #1e2d4a !important;
-    background:#131929 !important; color:#c0d0e8 !important; font-weight:600 !important;
+    padding:7px 12px !important; border:1px solid #e2e8f0 !important;
+    background:#ffffff !important; color:#374151 !important; font-weight:600 !important;
     text-align:left !important; justify-content:flex-start !important;
 }
-.stButton > button:hover { background:#1a2a45 !important; color:#4da6ff !important; border-color:#4da6ff !important; }
+.stButton > button:hover { background:#eff6ff !important; color:#2563eb !important; border-color:#bfdbfe !important; }
 
 /* Expander */
 [data-testid="stExpander"] {
-    background:#131929 !important; border-radius:8px !important;
-    border:1px solid #1e2d4a !important; margin-bottom:4px !important;
+    background:#ffffff !important; border-radius:8px !important;
+    border:1px solid #e2e8f0 !important; margin-bottom:4px !important;
 }
 
 /* Footer */
 .dash-footer {
-    font-size:0.7rem; color:#4a5a78;
+    font-size:0.7rem; color:#94a3b8;
     margin-top:24px; padding-top:10px;
-    border-top:1px solid #1e2d4a;
+    border-top:1px solid #e2e8f0;
     display:flex; justify-content:space-between;
 }
 </style>
@@ -245,17 +246,17 @@ div[data-testid="stSegmentedControl"] button {
     border-radius:20px !important;
     font-size:0.78rem !important; font-weight:600 !important;
     padding:5px 18px !important;
-    border:1.5px solid #2a3a55 !important;
-    background:#0d1226 !important; color:#a0b8d8 !important;
+    border:1.5px solid #e2e8f0 !important;
+    background:#f8fafc !important; color:#475569 !important;
     margin:0 3px !important;
 }
 div[data-testid="stSegmentedControl"] button[aria-checked="true"] {
-    background:#1565c0 !important;
-    border-color:#1565c0 !important;
+    background:#2563eb !important;
+    border-color:#2563eb !important;
     color:#ffffff !important;
 }
 div[data-testid="stSegmentedControl"] button:hover {
-    border-color:#4da6ff !important; color:#4da6ff !important;
+    border-color:#93c5fd !important; color:#2563eb !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -358,16 +359,16 @@ else:
             t_without = t_total - t_with
             t_cov     = round(t_with / t_total * 100, 1) if t_total else 0
             cov_icon  = "🟢" if t_cov >= 75 else ("🟡" if t_cov >= 50 else "🔴")
-            cov_color = "#2ecc71" if t_cov >= 75 else ("#f39c12" if t_cov >= 50 else "#e74c3c")
+            cov_color = "#16a34a" if t_cov >= 75 else ("#ea580c" if t_cov >= 50 else "#dc2626")
 
             r1, r2, r3, r4, r5, r6 = st.columns([5, 3, 2, 2, 2, 2])
             with r1:
                 arrow = "▼" if st.session_state[exp_key] else "▶"
                 if st.button(f"{arrow} {cov_icon}  {sub_name}", key=f"_btn_{sub_name}", use_container_width=True):
                     st.session_state[exp_key] = not st.session_state[exp_key]
-            r3.markdown(f"<div style='padding-top:6px;font-weight:700;color:#e0e6f0'>{t_total}</div>", unsafe_allow_html=True)
-            r4.markdown(f"<div style='padding-top:6px;font-weight:700;color:#2ecc71'>{t_with}</div>", unsafe_allow_html=True)
-            r5.markdown(f"<div style='padding-top:6px;font-weight:700;color:#e74c3c'>{t_without}</div>", unsafe_allow_html=True)
+            r3.markdown(f"<div style='padding-top:6px;font-weight:700;color:#0f172a'>{t_total}</div>", unsafe_allow_html=True)
+            r4.markdown(f"<div style='padding-top:6px;font-weight:700;color:#16a34a'>{t_with}</div>", unsafe_allow_html=True)
+            r5.markdown(f"<div style='padding-top:6px;font-weight:700;color:#dc2626'>{t_without}</div>", unsafe_allow_html=True)
             r6.markdown(f"<div style='padding-top:6px;font-weight:700;color:{cov_color}'>{t_cov}%</div>", unsafe_allow_html=True)
 
             if st.session_state[exp_key]:
@@ -386,10 +387,10 @@ else:
             t_cov    = float(sub_row["CoveragePct"].values[0]) if not sub_row.empty else 0
             cov_icon = "🟢" if t_cov >= 75 else ("🟡" if t_cov >= 50 else "🔴")
             r1, _, _, _, _, r6 = st.columns([5, 3, 2, 2, 2, 2])
-            r1.markdown(f"<div style='padding-top:6px;color:#8899bb'>&nbsp;&nbsp;{cov_icon} {sub_name}</div>", unsafe_allow_html=True)
-            r6.markdown(f"<div style='padding-top:6px;color:#8899bb'>{t_cov}%</div>", unsafe_allow_html=True)
+            r1.markdown(f"<div style='padding-top:6px;color:#64748b'>&nbsp;&nbsp;{cov_icon} {sub_name}</div>", unsafe_allow_html=True)
+            r6.markdown(f"<div style='padding-top:6px;color:#64748b'>{t_cov}%</div>", unsafe_allow_html=True)
 
-        st.markdown("<hr style='margin:2px 0;opacity:0.15;border-color:#1e2d4a;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin:2px 0;opacity:0.4;border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown(f"""

@@ -10,10 +10,10 @@ st.set_page_config(
 # Global styles — applied on every page
 st.markdown("""
 <style>
-/* Sidebar — always visible, force open */
+/* Sidebar — dark panel, always visible, force open */
 section[data-testid="stSidebar"] {
-    background-color: #0d1226 !important;
-    border-right: 2px solid #1e2d4a !important;
+    background-color: #0f172a !important;
+    border-right: 2px solid #1e293b !important;
     min-width: 240px !important;
     transform: translateX(0px) !important;
     display: block !important;
@@ -35,17 +35,17 @@ section[data-testid="stSidebar"] {
     padding-left: 1rem !important;
 }
 
-/* Nav links in sidebar */
+/* Nav links in sidebar — light text on dark bg */
 [data-testid="stSidebarNavLink"] {
     border-radius: 8px !important;
-    color: #c0d0e8 !important;
+    color: #94a3b8 !important;
 }
 [data-testid="stSidebarNavLink"]:hover {
-    background-color: #1e2a4a !important;
-    color: #60b4ff !important;
+    background-color: #1e293b !important;
+    color: #93c5fd !important;
 }
 [data-testid="stSidebarNavLink"][aria-current="page"] {
-    background-color: #1e2a4a !important;
+    background-color: #1e293b !important;
     color: #60b4ff !important;
     font-weight: 700 !important;
 }
