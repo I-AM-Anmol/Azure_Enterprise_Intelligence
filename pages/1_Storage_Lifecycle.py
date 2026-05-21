@@ -125,6 +125,15 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
     display:flex; justify-content:space-between;
 }
 
+/* Coverage matrix card */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background: #ffffff !important;
+    border-radius: 12px !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+    padding: 4px 8px 8px 8px !important;
+}
+
 /* Center dataframe column headers */
 [data-testid="stDataFrame"] th,
 [data-testid="stDataFrameResizable"] th {
@@ -707,108 +716,109 @@ else:
 # ═══════════════════════════════════════════════════════════════════════════════
 # SUBSCRIPTION COVERAGE MATRIX
 # ═══════════════════════════════════════════════════════════════════════════════
-st.markdown("---")
-mc_title, mc_export = st.columns([6, 2])
-with mc_title:
-    st.markdown('<div class="section-label">Subscription Coverage Matrix</div>', unsafe_allow_html=True)
-with mc_export:
-    st.download_button("⬇ Export CSV", csv_all, "storage_lifecycle_filtered.csv", "text/csv", key="exp_all")
+st.markdown("<br>", unsafe_allow_html=True)
 
-if not filtered.empty and display_sub_col:
-    sub_groups = filtered.groupby(display_sub_col)
-    sub_list   = sorted(filtered[display_sub_col].dropna().unique().tolist())
-else:
-    sub_groups = None
-    sub_list   = subs_df[sub_name_col].dropna().tolist() if not subs_df.empty else []
+with st.container(border=True):
+    mc_title, mc_export = st.columns([6, 2])
+    with mc_title:
+        st.markdown('<div class="section-label" style="margin-top:4px">Subscription Coverage Matrix</div>', unsafe_allow_html=True)
+    with mc_export:
+        st.download_button("⬇ Export CSV", csv_all, "storage_lifecycle_filtered.csv", "text/csv", key="exp_all")
 
-if not sub_list:
-    st.info("No subscriptions match the current filters.")
-else:
-    h1, h2, h3, h4, h5, h6 = st.columns([5, 3, 2, 2, 2, 2])
-    h1.markdown("**Subscription / Storage Account**")
-    h2.markdown("**Policy Name**")
-    h3.markdown("**Total**")
-    h4.markdown("**With Policy**")
-    h5.markdown("**Without Policy**")
-    h6.markdown("**Coverage %**")
-    st.markdown("<hr style='margin:4px 0;'>", unsafe_allow_html=True)
+    if not filtered.empty and display_sub_col:
+        sub_groups = filtered.groupby(display_sub_col)
+        sub_list   = sorted(filtered[display_sub_col].dropna().unique().tolist())
+    else:
+        sub_groups = None
+        sub_list   = subs_df[sub_name_col].dropna().tolist() if not subs_df.empty else []
 
-    # Pre-build per-account tier lookup for expanders
-    acct_tier_lookup = {}
-    if blob_loaded and not blob_df.empty:
-        for _, row in blob_df.iterrows():
-            acct_tier_lookup[row["StorageAccount"]] = {
-                "Hot_TB":     row["Hot_TB"],
-                "Cool_TB":    row["Cool_TB"],
-                "Cold_TB":    row["Cold_TB"],
-                "Archive_TB": row["Archive_TB"],
-                "Total_TB":   row["Total_TB"],
-            }
+    if not sub_list:
+        st.info("No subscriptions match the current filters.")
+    else:
+        h1, h2, h3, h4, h5, h6 = st.columns([5, 3, 2, 2, 2, 2])
+        h1.markdown("**Subscription / Storage Account**")
+        h2.markdown("**Policy Name**")
+        h3.markdown("**Total**")
+        h4.markdown("**With Policy**")
+        h5.markdown("**Without Policy**")
+        h6.markdown("**Coverage %**")
+        st.markdown("<hr style='margin:4px 0;'>", unsafe_allow_html=True)
 
-    for sub_name in sub_list:
-        exp_key = f"_xp_{sub_name}"
-        if exp_key not in st.session_state:
-            st.session_state[exp_key] = False
+        # Pre-build per-account tier lookup for expanders
+        acct_tier_lookup = {}
+        if blob_loaded and not blob_df.empty:
+            for _, row in blob_df.iterrows():
+                acct_tier_lookup[row["StorageAccount"]] = {
+                    "Hot_TB":     row["Hot_TB"],
+                    "Cool_TB":    row["Cool_TB"],
+                    "Cold_TB":    row["Cold_TB"],
+                    "Archive_TB": row["Archive_TB"],
+                    "Total_TB":   row["Total_TB"],
+                }
 
-        if sub_groups and sub_name in sub_groups.groups:
-            grp       = sub_groups.get_group(sub_name)
-            t_total   = len(grp)
-            t_with    = int(grp["HasPolicy"].sum())
-            t_without = t_total - t_with
-            t_cov     = round(t_with / t_total * 100, 1) if t_total else 0
-            cov_icon  = "🟢" if t_cov >= 75 else ("🟡" if t_cov >= 50 else "🔴")
-            cov_color = "#16a34a" if t_cov >= 75 else ("#ea580c" if t_cov >= 50 else "#dc2626")
+        for sub_name in sub_list:
+            exp_key = f"_xp_{sub_name}"
+            if exp_key not in st.session_state:
+                st.session_state[exp_key] = False
 
-            r1, r2, r3, r4, r5, r6 = st.columns([5, 3, 2, 2, 2, 2])
-            with r1:
-                arrow = "▼" if st.session_state[exp_key] else "▶"
-                if st.button(f"{arrow} {cov_icon}  {sub_name}", key=f"_btn_{sub_name}", use_container_width=True):
-                    st.session_state[exp_key] = not st.session_state[exp_key]
-            r3.markdown(f"<div style='padding-top:6px;font-weight:700;color:#0f172a'>{t_total}</div>", unsafe_allow_html=True)
-            r4.markdown(f"<div style='padding-top:6px;font-weight:700;color:#16a34a'>{t_with}</div>", unsafe_allow_html=True)
-            r5.markdown(f"<div style='padding-top:6px;font-weight:700;color:#dc2626'>{t_without}</div>", unsafe_allow_html=True)
-            r6.markdown(f"<div style='padding-top:6px;font-weight:700;color:{cov_color}'>{t_cov}%</div>", unsafe_allow_html=True)
+            if sub_groups and sub_name in sub_groups.groups:
+                grp       = sub_groups.get_group(sub_name)
+                t_total   = len(grp)
+                t_with    = int(grp["HasPolicy"].sum())
+                t_without = t_total - t_with
+                t_cov     = round(t_with / t_total * 100, 1) if t_total else 0
+                cov_icon  = "🟢" if t_cov >= 75 else ("🟡" if t_cov >= 50 else "🔴")
+                cov_color = "#16a34a" if t_cov >= 75 else ("#ea580c" if t_cov >= 50 else "#dc2626")
 
-            if st.session_state[exp_key]:
-                with st.container():
-                    acct_rows = []
-                    for _, row in grp.iterrows():
-                        acct_nm     = row.get(acct_name_col, "—")
-                        policy_disp = row.get(policy_col, "") if policy_col else ""
-                        policy_disp = policy_disp if str(policy_disp).strip() not in ("", "nan", "None") \
-                                      else ("Implemented" if row["HasPolicy"] else "Not Implemented")
-                        status      = "✅ Implemented" if row["HasPolicy"] else "❌ Not Implemented"
-                        acct_entry  = {
-                            "Storage Account": acct_nm,
-                            "Policy":          policy_disp,
-                            "Status":          status,
-                        }
-                        # Inject tier columns if blob data is available
-                        if acct_nm in acct_tier_lookup:
-                            t = acct_tier_lookup[acct_nm]
-                            acct_entry["Hot (TB)"]     = t["Hot_TB"]
-                            acct_entry["Cool (TB)"]    = t["Cool_TB"]
-                            acct_entry["Cold (TB)"]    = t["Cold_TB"]
-                            acct_entry["Archive (TB)"] = t["Archive_TB"]
-                            acct_entry["Total (TB)"]   = t["Total_TB"]
-                        acct_rows.append(acct_entry)
+                r1, r2, r3, r4, r5, r6 = st.columns([5, 3, 2, 2, 2, 2])
+                with r1:
+                    arrow = "▼" if st.session_state[exp_key] else "▶"
+                    if st.button(f"{arrow} {cov_icon}  {sub_name}", key=f"_btn_{sub_name}", use_container_width=True):
+                        st.session_state[exp_key] = not st.session_state[exp_key]
+                r3.markdown(f"<div style='padding-top:6px;font-weight:700;color:#0f172a'>{t_total}</div>", unsafe_allow_html=True)
+                r4.markdown(f"<div style='padding-top:6px;font-weight:700;color:#16a34a'>{t_with}</div>", unsafe_allow_html=True)
+                r5.markdown(f"<div style='padding-top:6px;font-weight:700;color:#dc2626'>{t_without}</div>", unsafe_allow_html=True)
+                r6.markdown(f"<div style='padding-top:6px;font-weight:700;color:{cov_color}'>{t_cov}%</div>", unsafe_allow_html=True)
 
-                    if acct_rows:
-                        acct_tbl = pd.DataFrame(acct_rows)
-                        col_cfg  = {}
-                        for tc in ["Hot (TB)", "Cool (TB)", "Cold (TB)", "Archive (TB)", "Total (TB)"]:
-                            if tc in acct_tbl.columns:
-                                col_cfg[tc] = st.column_config.NumberColumn(format="%d TB")
-                        st.dataframe(acct_tbl, use_container_width=True, hide_index=True, column_config=col_cfg)
-        else:
-            sub_row  = subs_df[subs_df[sub_name_col] == sub_name] if not subs_df.empty else pd.DataFrame()
-            t_cov    = float(sub_row["CoveragePct"].values[0]) if not sub_row.empty else 0
-            cov_icon = "🟢" if t_cov >= 75 else ("🟡" if t_cov >= 50 else "🔴")
-            r1, _, _, _, _, r6 = st.columns([5, 3, 2, 2, 2, 2])
-            r1.markdown(f"<div style='padding-top:6px;color:#64748b'>&nbsp;&nbsp;{cov_icon} {sub_name}</div>", unsafe_allow_html=True)
-            r6.markdown(f"<div style='padding-top:6px;color:#64748b'>{t_cov}%</div>", unsafe_allow_html=True)
+                if st.session_state[exp_key]:
+                    with st.container():
+                        acct_rows = []
+                        for _, row in grp.iterrows():
+                            acct_nm     = row.get(acct_name_col, "—")
+                            policy_disp = row.get(policy_col, "") if policy_col else ""
+                            policy_disp = policy_disp if str(policy_disp).strip() not in ("", "nan", "None") \
+                                          else ("Implemented" if row["HasPolicy"] else "Not Implemented")
+                            status      = "✅ Implemented" if row["HasPolicy"] else "❌ Not Implemented"
+                            acct_entry  = {
+                                "Storage Account": acct_nm,
+                                "Policy":          policy_disp,
+                                "Status":          status,
+                            }
+                            if acct_nm in acct_tier_lookup:
+                                t = acct_tier_lookup[acct_nm]
+                                acct_entry["Hot (TB)"]     = t["Hot_TB"]
+                                acct_entry["Cool (TB)"]    = t["Cool_TB"]
+                                acct_entry["Cold (TB)"]    = t["Cold_TB"]
+                                acct_entry["Archive (TB)"] = t["Archive_TB"]
+                                acct_entry["Total (TB)"]   = t["Total_TB"]
+                            acct_rows.append(acct_entry)
 
-        st.markdown("<hr style='margin:2px 0;opacity:0.4;border-color:#e2e8f0;'>", unsafe_allow_html=True)
+                        if acct_rows:
+                            acct_tbl = pd.DataFrame(acct_rows)
+                            col_cfg  = {}
+                            for tc in ["Hot (TB)", "Cool (TB)", "Cold (TB)", "Archive (TB)", "Total (TB)"]:
+                                if tc in acct_tbl.columns:
+                                    col_cfg[tc] = st.column_config.NumberColumn(format="%d TB")
+                            st.dataframe(acct_tbl, use_container_width=True, hide_index=True, column_config=col_cfg)
+            else:
+                sub_row  = subs_df[subs_df[sub_name_col] == sub_name] if not subs_df.empty else pd.DataFrame()
+                t_cov    = float(sub_row["CoveragePct"].values[0]) if not sub_row.empty else 0
+                cov_icon = "🟢" if t_cov >= 75 else ("🟡" if t_cov >= 50 else "🔴")
+                r1, _, _, _, _, r6 = st.columns([5, 3, 2, 2, 2, 2])
+                r1.markdown(f"<div style='padding-top:6px;color:#64748b'>&nbsp;&nbsp;{cov_icon} {sub_name}</div>", unsafe_allow_html=True)
+                r6.markdown(f"<div style='padding-top:6px;color:#64748b'>{t_cov}%</div>", unsafe_allow_html=True)
+
+            st.markdown("<hr style='margin:2px 0;opacity:0.4;border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
 
 # ── Footer ────────────────────────────────────────────────────────────────────
