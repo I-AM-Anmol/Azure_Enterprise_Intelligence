@@ -193,7 +193,7 @@ generated   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 # ── Top banner ────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div class="top-banner">
-  <div class="dash-title">Azure Storage <span>Lifecycle Policy</span> Coverage</div>
+  <div class="dash-title">Azure Storage <span>Lifecycle Policy</span> Coverage &nbsp;<small style="font-size:0.7em;font-weight:400;color:#93c5fd;background:#1e3a8a;padding:2px 10px;border-radius:20px;vertical-align:middle">CloudLens</small></div>
   <div class="dash-meta">
     <span class="m">{TENANT_NAME}</span>
     <span class="m">{user_email}</span>
