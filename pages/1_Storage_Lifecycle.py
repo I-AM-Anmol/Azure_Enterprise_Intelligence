@@ -125,6 +125,12 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
     display:flex; justify-content:space-between;
 }
 
+/* Center dataframe column headers */
+[data-testid="stDataFrame"] th,
+[data-testid="stDataFrameResizable"] th {
+    text-align: center !important;
+}
+
 div[data-testid="stSegmentedControl"] { gap:0 !important; }
 div[data-testid="stSegmentedControl"] > label { display:none !important; }
 div[data-testid="stSegmentedControl"] button {
@@ -359,7 +365,7 @@ generated   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 # ── Top banner ────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div class="top-banner">
-  <div class="dash-title">Azure Storage <span>Lifecycle Policy</span> Coverage &nbsp;<small style="font-size:0.7em;font-weight:400;color:#93c5fd;background:#1e3a8a;padding:2px 10px;border-radius:20px;vertical-align:middle">CloudLens</small></div>
+  <div class="dash-title">Azure Storage <span>Lifecycle Policy</span> Coverage</div>
   <div class="dash-meta">
     <span class="m">{TENANT_NAME}</span>
     <span class="m">{user_email}</span>
@@ -539,35 +545,35 @@ else:
         with b0:
             st.markdown(f"""<div class="kpi-card">
                 <div class="kpi-icon">💾</div>
-                <div class="kpi-value">{total_tb:,.2f}</div>
+                <div class="kpi-value">{total_tb:,.0f}</div>
                 <div class="kpi-label">Total Blob TB</div>
                 <div class="kpi-sub">{blob_filtered['StorageAccount'].nunique()} accounts · {blob_filtered['SubscriptionId'].nunique()} subs</div>
             </div>""", unsafe_allow_html=True)
         with b1:
             st.markdown(f"""<div class="kpi-card hot">
                 <div class="kpi-icon">🔥</div>
-                <div class="kpi-value hot">{hot_tb:,.2f}</div>
+                <div class="kpi-value hot">{hot_tb:,.0f}</div>
                 <div class="kpi-label">Hot Tier TB</div>
                 <div class="kpi-sub">{hot_pct}% of total blob</div>
             </div>""", unsafe_allow_html=True)
         with b2:
             st.markdown(f"""<div class="kpi-card cool">
                 <div class="kpi-icon">❄️</div>
-                <div class="kpi-value cool">{cool_tb:,.2f}</div>
+                <div class="kpi-value cool">{cool_tb:,.0f}</div>
                 <div class="kpi-label">Cool Tier TB</div>
                 <div class="kpi-sub">{cool_pct}% of total blob</div>
             </div>""", unsafe_allow_html=True)
         with b3:
             st.markdown(f"""<div class="kpi-card cold">
                 <div class="kpi-icon">🧊</div>
-                <div class="kpi-value cold">{cold_tb:,.2f}</div>
+                <div class="kpi-value cold">{cold_tb:,.0f}</div>
                 <div class="kpi-label">Cold Tier TB</div>
                 <div class="kpi-sub">{cold_pct}% of total blob</div>
             </div>""", unsafe_allow_html=True)
         with b4:
             st.markdown(f"""<div class="kpi-card archive">
                 <div class="kpi-icon">📦</div>
-                <div class="kpi-value archive">{archive_tb:,.2f}</div>
+                <div class="kpi-value archive">{archive_tb:,.0f}</div>
                 <div class="kpi-label">Archive Tier TB</div>
                 <div class="kpi-sub">{archive_pct}% of total blob</div>
             </div>""", unsafe_allow_html=True)
@@ -681,17 +687,17 @@ else:
                 "Subscription", "Hot (TB)", "Cool (TB)", "Cold (TB)", "Archive (TB)", "Total (TB)"
             ]
             for col in ["Hot (TB)", "Cool (TB)", "Cold (TB)", "Archive (TB)", "Total (TB)"]:
-                sub_tier_tbl[col] = sub_tier_tbl[col].round(4)
+                sub_tier_tbl[col] = sub_tier_tbl[col].round(0).astype(int)
             st.dataframe(
                 sub_tier_tbl,
                 use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "Hot (TB)":     st.column_config.NumberColumn(format="%.4f TB"),
-                    "Cool (TB)":    st.column_config.NumberColumn(format="%.4f TB"),
-                    "Cold (TB)":    st.column_config.NumberColumn(format="%.4f TB"),
-                    "Archive (TB)": st.column_config.NumberColumn(format="%.4f TB"),
-                    "Total (TB)":   st.column_config.NumberColumn(format="%.4f TB"),
+                    "Hot (TB)":     st.column_config.NumberColumn(format="%d TB"),
+                    "Cool (TB)":    st.column_config.NumberColumn(format="%d TB"),
+                    "Cold (TB)":    st.column_config.NumberColumn(format="%d TB"),
+                    "Archive (TB)": st.column_config.NumberColumn(format="%d TB"),
+                    "Total (TB)":   st.column_config.NumberColumn(format="%d TB"),
                 },
             )
             csv_blob = sub_tier_tbl.to_csv(index=False).encode()
@@ -792,7 +798,7 @@ else:
                         col_cfg  = {}
                         for tc in ["Hot (TB)", "Cool (TB)", "Cold (TB)", "Archive (TB)", "Total (TB)"]:
                             if tc in acct_tbl.columns:
-                                col_cfg[tc] = st.column_config.NumberColumn(format="%.4f TB")
+                                col_cfg[tc] = st.column_config.NumberColumn(format="%d TB")
                         st.dataframe(acct_tbl, use_container_width=True, hide_index=True, column_config=col_cfg)
         else:
             sub_row  = subs_df[subs_df[sub_name_col] == sub_name] if not subs_df.empty else pd.DataFrame()
