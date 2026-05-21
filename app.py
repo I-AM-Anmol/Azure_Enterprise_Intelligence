@@ -42,12 +42,12 @@ div[data-testid="stSidebarUserContent"] { order: 1 !important; }
 
 /* ── Logo area — white logo, no background ──────────────────── */
 .sb-logo-card {
-    padding: 22px 20px 14px 20px;
+    padding: 20px 10px 12px 10px;
     text-align: center;
 }
 .sb-logo-card img {
-    width: 88%;
-    max-width: 220px;
+    width: 100%;
+    max-width: 260px;
     height: auto;
     display: block;
     margin: 0 auto;
