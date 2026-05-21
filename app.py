@@ -3,14 +3,15 @@ import base64
 from pathlib import Path
 
 st.set_page_config(
-    page_title="Azure FinOps Command Center — MedInsight",
-    page_icon="☁️",
+    page_title="CloudLens — MedInsight FinOps",
+    page_icon="🔭",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Embed logo as base64 so it survives deployment without extra HTTP requests
-_logo_path = Path(__file__).parent / "assets" / "milliman_logo.png"
+# CloudLens SVG logo — embedded as base64 for deployment portability
+_logo_path = Path(__file__).parent / "assets" / "cloudlens_logo.svg"
+_logo_mime = "image/svg+xml"
 _logo_b64  = base64.b64encode(_logo_path.read_bytes()).decode() if _logo_path.exists() else None
 
 # Global styles — applied on every page
@@ -107,7 +108,7 @@ if _logo_b64:
     with st.sidebar:
         st.markdown(
             f'<div class="sb-logo-card">'
-            f'<img src="data:image/png;base64,{_logo_b64}" alt="Milliman MedInsight">'
+            f'<img src="data:{_logo_mime};base64,{_logo_b64}" alt="CloudLens">'
             f'</div>'
             f'<hr class="sb-divider">',
             unsafe_allow_html=True,
