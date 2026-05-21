@@ -40,18 +40,16 @@ div[data-testid="stSidebarContent"] {
 div[data-testid="stSidebarNav"]         { order: 2 !important; }
 div[data-testid="stSidebarUserContent"] { order: 1 !important; }
 
-/* ── Logo area — white logo, no background ──────────────────── */
+/* ── Logo area — fills sidebar width like Flexera ───────────── */
 .sb-logo-card {
-    padding: 20px 10px 12px 10px;
-    text-align: center;
+    padding: 18px 8px 10px 8px;
 }
 .sb-logo-card img {
     width: 100%;
-    max-width: 260px;
+    max-width: 280px;
     height: auto;
     display: block;
-    margin: 0 auto;
-    opacity: 0.95;
+    opacity: 0.96;
 }
 .sb-divider {
     border: none;

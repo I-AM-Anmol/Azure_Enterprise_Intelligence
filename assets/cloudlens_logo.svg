@@ -1,60 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none">
   <defs>
-    <linearGradient id="cloudGrad" x1="0" y1="0" x2="0.7" y2="1">
+    <linearGradient id="cg" x1="0" y1="0" x2="0.6" y2="1">
       <stop offset="0%" stop-color="#60a5fa"/>
       <stop offset="100%" stop-color="#1d4ed8"/>
     </linearGradient>
-    <linearGradient id="lensGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="rgba(255,255,255,0.25)"/>
-      <stop offset="100%" stop-color="rgba(255,255,255,0.05)"/>
+    <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.22)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0.04)"/>
     </linearGradient>
   </defs>
 
-  <!-- ── Cloud body (scaled up ~15%) ─────────────────────────── -->
-  <g transform="translate(4, 7)">
+  <!-- ── Compact cloud icon (left) ──────────────────────── -->
+  <g transform="translate(2, 9)">
     <path d="
-      M 5 58
-      Q 0 58 0 50
-      Q 0 41 9 39
-      Q 7 25 18 23
-      Q 16 11 28 11
-      Q 35 11 38 17
-      Q 42  7 53  7
-      Q 67  7 69 21
-      Q 78 18 83 28
-      Q 90 30 87 44
-      Q 85 58 76 58
+      M 3 36
+      Q 0 36 0 30  Q 0 23  7 22
+      Q 5 13 14 13  Q 12  6 21  6
+      Q 27  6 29 11  Q 31  5 38  5
+      Q 47  5 47 15  Q 52 15 54 21
+      Q 57 24 54 32  Q 52 39 44 39
       Z
-    " fill="url(#cloudGrad)"/>
+    " fill="url(#cg)"/>
 
-    <!-- ── Magnifying glass circle ────────────── -->
-    <circle cx="46" cy="34" r="15"
-            fill="url(#lensGrad)"
-            stroke="white" stroke-width="2.5"/>
+    <!-- Magnifying glass circle -->
+    <circle cx="29" cy="23" r="10"
+            fill="url(#lg)" stroke="white" stroke-width="1.8"/>
 
-    <!-- Lens inner glint -->
-    <ellipse cx="39" cy="27" rx="4.5" ry="3"
-             fill="white" opacity="0.38"
-             transform="rotate(-35 39 27)"/>
+    <!-- Lens glint -->
+    <ellipse cx="24" cy="18" rx="3" ry="1.8"
+             fill="white" opacity="0.42"
+             transform="rotate(-35 24 18)"/>
 
-    <!-- ── Handle ──────────────────────────────── -->
-    <line x1="57" y1="47" x2="71" y2="61"
-          stroke="white" stroke-width="3.2"
-          stroke-linecap="round"/>
-    <circle cx="71" cy="61" r="2" fill="white" opacity="0.7"/>
+    <!-- Handle -->
+    <line x1="36" y1="30" x2="46" y2="40"
+          stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+    <circle cx="46" cy="40" r="1.4" fill="white" opacity="0.7"/>
   </g>
 
-  <!-- ── Wordmark ────────────────────────────── -->
-  <text x="106" y="42"
+  <!-- ── Wordmark — large, Flexera-style ───────────────── -->
+  <text x="64" y="34"
         font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
-        font-size="32" font-weight="700"
-        fill="white" letter-spacing="-0.5">Cloud<tspan fill="#93c5fd">Lens</tspan>
+        font-size="28" font-weight="700"
+        fill="white" letter-spacing="-0.3">Cloud<tspan fill="#93c5fd">Lens</tspan>
   </text>
 
-  <!-- ── Tagline ─────────────────────────────── -->
-  <text x="107" y="58"
+  <!-- ── Tagline ─────────────────────────────────────────── -->
+  <text x="65" y="48"
         font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
-        font-size="9.5" fill="rgba(255,255,255,0.40)"
-        letter-spacing="2.2">FINOPS INTELLIGENCE
+        font-size="8" fill="rgba(255,255,255,0.38)"
+        letter-spacing="2">FINOPS INTELLIGENCE
   </text>
 </svg>
