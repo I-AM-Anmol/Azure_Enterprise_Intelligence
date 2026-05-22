@@ -125,9 +125,14 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
     display:flex; justify-content:space-between;
 }
 
-/* Coverage matrix card */
+/* Coverage matrix card — force white background on all layers */
+[data-testid="stVerticalBlockBorderWrapper"],
+[data-testid="stVerticalBlockBorderWrapper"] > div,
+[data-testid="stVerticalBlockBorderWrapper"] > div > [data-testid="stVerticalBlock"],
+[data-testid="stVerticalBlockBorderWrapper"] > div > [data-testid="stVerticalBlock"] > div {
+    background-color: #ffffff !important;
+}
 [data-testid="stVerticalBlockBorderWrapper"] {
-    background: #ffffff !important;
     border-radius: 12px !important;
     border: 1px solid #e2e8f0 !important;
     box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
