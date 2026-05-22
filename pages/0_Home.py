@@ -45,7 +45,7 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
 
 st.markdown("""
 <div class="landing-banner">
-  <div class="landing-title">Cloud<span>Lens</span> &mdash; MedInsight FinOps</div>
+  <div class="landing-title">MedInsight <span>Cloud Intelligence Hub</span></div>
   <div class="landing-sub">MedInsight Production Tenant &nbsp;·&nbsp; Select a dashboard from the sidebar or below</div>
 </div>
 """, unsafe_allow_html=True)
