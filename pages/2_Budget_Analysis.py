@@ -1,7 +1,8 @@
 import streamlit as st
 import requests
 import pandas as pd
-from azure.identity import AzureCliCredential
+import msal
+from azure.identity import AzureCliCredential, ClientSecretCredential
 from datetime import datetime
 import math
 import time
@@ -163,11 +164,24 @@ table.bgt tr:hover td { background:#f8fafc; }
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 def get_token():
+    # Streamlit Cloud: service principal via secrets
+    # Configure in app secrets: [azure] client_id / client_secret / tenant_id
+    try:
+        az = st.secrets["azure"]
+        cred = ClientSecretCredential(az["tenant_id"], az["client_id"], az["client_secret"])
+        return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
+    except (KeyError, FileNotFoundError):
+        pass
+
+    # Local dev: uses existing az login session
     try:
         cred = AzureCliCredential(tenant_id=TENANT_ID)
         return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
     except Exception as e:
-        st.error(f"Authentication failed. Run `az login --tenant {TENANT_ID}` in a terminal first. Error: {e}")
+        st.error(
+            f"Authentication failed. Either configure **[azure]** secrets in Streamlit Cloud, "
+            f"or run `az login --tenant {TENANT_ID}` locally. Error: {e}"
+        )
         st.stop()
 
 
