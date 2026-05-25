@@ -203,8 +203,8 @@ def fetch_budget_data(token):
         timeout=30,
     )
     if resp.status_code == 401:
-        st.warning("Token expired — refreshing...")
-        st.rerun()
+        st.error(f"Power BI API 401 — {resp.text}")
+        st.stop()
     resp.raise_for_status()
     rows    = resp.json()["results"][0]["tables"][0].get("rows", [])
     elapsed = round(time.time() - t0, 1)
