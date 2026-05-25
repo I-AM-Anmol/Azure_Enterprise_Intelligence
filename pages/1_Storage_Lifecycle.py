@@ -188,9 +188,10 @@ def get_token():
 
 # ── ARM auth (MedInsight tenant for Azure Monitor metrics) ────────────────────
 def get_arm_token():
-    # Streamlit Cloud: service principal via secrets
+    # Streamlit Cloud: MedInsight SP — must be in [azure_medinsight] secrets section,
+    # separate from [azure] which holds the Milliman SP for Power BI.
     try:
-        az = st.secrets["azure"]
+        az = st.secrets["azure_medinsight"]
         cred = ClientSecretCredential(ARM_TENANT_ID, az["client_id"], az["client_secret"])
         return cred.get_token("https://management.azure.com/.default").token
     except (KeyError, FileNotFoundError):
@@ -505,7 +506,8 @@ with bt_action_col:
     if st.button(blob_cache_label, key="load_blob_btn"):
         arm_token = get_arm_token()
         if arm_token and arm_sub_ids:
-            st.session_state.pop("blob_tier_df", None)   # force re-fetch
+            st.session_state["arm_token"] = arm_token   # persist for use after rerun
+            st.session_state.pop("blob_tier_df", None)  # force re-fetch
             st.session_state.pop("blob_tier_ts",  None)
             st.rerun()
 
