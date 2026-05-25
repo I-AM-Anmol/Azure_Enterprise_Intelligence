@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-import msal
+from azure.identity import AzureCliCredential
 import plotly.graph_objects as go
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -164,44 +164,22 @@ div[data-testid="stSegmentedControl"] button:hover {
 
 # ── Power BI auth ─────────────────────────────────────────────────────────────
 def get_token():
-    if "access_token" in st.session_state:
-        return st.session_state["access_token"]
-    app  = msal.PublicClientApplication(CLIENT_ID, authority=AUTHORITY)
-    flow = app.initiate_device_flow(scopes=SCOPES)
-    if "user_code" not in flow:
-        st.error("Failed to start device flow.")
+    try:
+        cred = AzureCliCredential(tenant_id=TENANT_ID)
+        return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
+    except Exception as e:
+        st.error(f"Authentication failed. Run `az login --tenant {TENANT_ID}` in a terminal first. Error: {e}")
         st.stop()
-    st.info(f"**Sign in required** — Go to: {flow['verification_uri']}  |  Code: `{flow['user_code']}`")
-    with st.spinner("Waiting for authentication..."):
-        result = app.acquire_token_by_device_flow(flow)
-    if "access_token" not in result:
-        st.error(f"Authentication failed: {result.get('error_description', 'Unknown error')}")
-        st.stop()
-    st.session_state["access_token"] = result["access_token"]
-    st.session_state["user_email"]   = result.get("id_token_claims", {}).get("preferred_username", "unknown")
-    st.rerun()
 
 
 # ── ARM auth (MedInsight tenant for Azure Monitor metrics) ────────────────────
 def get_arm_token():
-    if "arm_token" in st.session_state:
-        return st.session_state["arm_token"]
-    app  = msal.PublicClientApplication(CLIENT_ID, authority=ARM_AUTHORITY)
-    flow = app.initiate_device_flow(scopes=ARM_SCOPES)
-    if "user_code" not in flow:
-        st.error("Failed to start ARM device flow.")
+    try:
+        cred = AzureCliCredential(tenant_id=ARM_TENANT_ID)
+        return cred.get_token("https://management.azure.com/.default").token
+    except Exception as e:
+        st.error(f"ARM authentication failed. Run `az login --tenant {ARM_TENANT_ID}` in a terminal first. Error: {e}")
         return None
-    st.info(
-        f"**Azure Monitor sign-in required** — "
-        f"Go to: {flow['verification_uri']}  |  Code: `{flow['user_code']}`"
-    )
-    with st.spinner("Waiting for Azure Monitor authentication..."):
-        result = app.acquire_token_by_device_flow(flow)
-    if "access_token" not in result:
-        st.error(f"ARM auth failed: {result.get('error_description', 'Unknown error')}")
-        return None
-    st.session_state["arm_token"] = result["access_token"]
-    st.rerun()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

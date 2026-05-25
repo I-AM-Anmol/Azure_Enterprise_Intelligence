@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-import msal
+from azure.identity import AzureCliCredential
 from datetime import datetime
 import math
 import time
@@ -163,22 +163,12 @@ table.bgt tr:hover td { background:#f8fafc; }
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 def get_token():
-    if "access_token" in st.session_state:
-        return st.session_state["access_token"]
-    app  = msal.PublicClientApplication(CLIENT_ID, authority=AUTHORITY)
-    flow = app.initiate_device_flow(scopes=SCOPES)
-    if "user_code" not in flow:
-        st.error("Failed to start device flow.")
+    try:
+        cred = AzureCliCredential(tenant_id=TENANT_ID)
+        return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
+    except Exception as e:
+        st.error(f"Authentication failed. Run `az login --tenant {TENANT_ID}` in a terminal first. Error: {e}")
         st.stop()
-    st.info(f"**Sign in required** — Go to: {flow['verification_uri']}  |  Code: `{flow['user_code']}`")
-    with st.spinner("Waiting for authentication..."):
-        result = app.acquire_token_by_device_flow(flow)
-    if "access_token" not in result:
-        st.error(f"Authentication failed: {result.get('error_description', 'Unknown error')}")
-        st.stop()
-    st.session_state["access_token"] = result["access_token"]
-    st.session_state["user_email"]   = result.get("id_token_claims", {}).get("preferred_username", "unknown")
-    st.rerun()
 
 
 def strip_prefix(col):
@@ -199,8 +189,7 @@ def fetch_budget_data(token):
         timeout=30,
     )
     if resp.status_code == 401:
-        del st.session_state["access_token"]
-        st.warning("Session expired — please re-authenticate.")
+        st.warning("Token expired — refreshing...")
         st.rerun()
     resp.raise_for_status()
     rows    = resp.json()["results"][0]["tables"][0].get("rows", [])
