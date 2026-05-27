@@ -15,7 +15,7 @@ DATASET_ID   = "56e6e1c3-8b70-4c53-b288-331041ce1f3f"
 CLIENT_ID    = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
 AUTHORITY    = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPES       = ["https://analysis.windows.net/powerbi/api/.default"]
-TENANT_NAME  = "MedInsight Production"
+TENANT_NAME  = "MedInsight Production · Engineering · Milliman"
 
 st_autorefresh(interval=300000)
 
