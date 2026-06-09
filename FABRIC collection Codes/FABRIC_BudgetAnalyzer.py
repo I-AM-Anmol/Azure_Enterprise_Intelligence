@@ -1,4 +1,4 @@
-# Fabric notebook source
+# # Fabric notebook source
 
 # METADATA ********************
 
@@ -76,19 +76,20 @@ MAX_WORKERS  = 50    # increased — budget list API is lenient; cost queries on
 # ── SERVICE PRINCIPAL CONFIGURATION ──────────────────────────────────────────
 # Set CLIENT_ID + CLIENT_SECRET (or CERTIFICATE_PATH) for each tenant that has
 # an SP. Leave CLIENT_SECRET as "" to skip SP auth for that tenant.
+# Secrets should be stored in environment variables for security.
 
 SERVICE_PRINCIPALS = {
     "b2e2e6d4-979f-4671-aa72-0f0c494a0173": {   # MedInsight Production
-        "client_id":     "37b785ce-3326-45f3-a251-28202711dd6f",
-        "client_secret": os.getenv("AZURE_CLIENT_SECRET", ""),   # Use environment variable
+        "client_id":     os.getenv("AZURE_CLIENT_ID_PROD", "37b785ce-3326-45f3-a251-28202711dd6f"),
+        "client_secret": os.getenv("AZURE_CLIENT_SECRET_PROD", "")
     },
     "ff6598a3-6053-498d-a3b0-54295c0ce494": {   # MedInsight Engineering (reader via az login / DefaultAzureCredential)
-        "client_id":     "",
-        "client_secret": "",
+        "client_id":     os.getenv("AZURE_CLIENT_ID_ENG", "c498ca52-2eb4-45e5-ac49-6f503661baca"),
+        "client_secret": os.getenv("AZURE_CLIENT_SECRET_ENG", ""),
     },
     "e240d61e-61e3-4c9e-ab90-8644b2f4d2a9": {   # Milliman Inc. (optional)
-        "client_id":     "",
-        "client_secret": "",
+        "client_id":     os.getenv("AZURE_CLIENT_ID_MILLIMAN", ""),
+        "client_secret": os.getenv("AZURE_CLIENT_SECRET_MILLIMAN", ""),
     },
 }
 
@@ -558,4 +559,5 @@ print(f"Done — {df.count()} rows written to BudgetData table")
 # META {
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
-# META }
+# META }Welcome to your new notebook
+# Type here in the cell editor to add code!
