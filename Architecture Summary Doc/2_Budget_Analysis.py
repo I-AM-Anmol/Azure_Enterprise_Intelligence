@@ -84,6 +84,7 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
 }
 .stDownloadButton > button:hover { background:#1d4ed8 !important; }
 
+/* Segmented control pill styling */
 div[data-testid="stSegmentedControl"] { gap:0 !important; }
 div[data-testid="stSegmentedControl"] > label { display:none !important; }
 div[data-testid="stSegmentedControl"] button {
@@ -101,6 +102,7 @@ div[data-testid="stSegmentedControl"] button:hover {
     border-color:#93c5fd !important; color:#2563eb !important;
 }
 
+/* Budget table */
 .bgt-wrap { overflow-x:auto; margin-top:8px; border-radius:8px; border:1px solid #e2e8f0; }
 table.bgt { width:100%; border-collapse:collapse; font-size:12px; }
 table.bgt thead tr { background:#f8fafc; border-bottom:2px solid #e2e8f0; }
@@ -119,6 +121,7 @@ table.bgt tr:hover td { background:#f8fafc; }
 .bn  { font-size:11px; color:#374151; font-family:monospace; background:#f1f5f9;
        padding:2px 6px; border-radius:4px; white-space:nowrap; }
 
+/* Progress bar */
 .bw  { min-width:150px; }
 .bt  { height:10px; background:#e2e8f0; border-radius:5px; position:relative; overflow:visible; margin-bottom:3px; }
 .bpj { height:100%; border-radius:5px; position:absolute; top:0; left:0; }
@@ -155,62 +158,22 @@ table.bgt tr:hover td { background:#f8fafc; }
     border-top:1px solid #e2e8f0;
     display:flex; justify-content:space-between;
 }
-
-/* ── Burn Driver section styles ─────────────────────────────────────────── */
-.driver-card {
-    background:#fff; border-radius:10px; border:1px solid #e2e8f0;
-    padding:16px 18px; margin-bottom:12px;
-    box-shadow:0 1px 3px rgba(0,0,0,0.05);
-}
-.driver-card-title {
-    font-size:0.82rem; font-weight:700; color:#1e293b;
-    margin-bottom:12px; display:flex; align-items:center; gap:8px;
-}
-.driver-sub-name { font-size:0.78rem; font-weight:700; color:#1e3a8a; margin-bottom:2px; }
-.driver-sub-meta { font-size:0.68rem; color:#64748b; margin-bottom:8px; }
-
-/* ServiceFamily breakdown bar */
-.sf-bar-wrap { margin-bottom:6px; }
-.sf-bar-label { display:flex; justify-content:space-between; font-size:0.7rem; color:#374151; margin-bottom:3px; }
-.sf-bar-track { height:7px; background:#f1f5f9; border-radius:4px; overflow:hidden; }
-.sf-bar-fill  { height:100%; border-radius:4px; }
-
-/* Trend pill */
-.trend-up   { display:inline-block; background:#fef2f2; color:#dc2626; border:1px solid #fca5a5;
-              border-radius:20px; padding:2px 9px; font-size:10px; font-weight:700; }
-.trend-dn   { display:inline-block; background:#dcfce7; color:#16a34a; border:1px solid #86efac;
-              border-radius:20px; padding:2px 9px; font-size:10px; font-weight:700; }
-.trend-flat { display:inline-block; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0;
-              border-radius:20px; padding:2px 9px; font-size:10px; font-weight:700; }
-.accel-warn { display:inline-block; background:#fff7ed; color:#c2410c; border:1px solid #fed7aa;
-              border-radius:20px; padding:2px 9px; font-size:10px; font-weight:700; margin-left:4px; }
-
-/* Recommendation cards */
-.rec-card {
-    border-radius:8px; padding:13px 16px; margin-bottom:9px;
-    border-left:4px solid #e2e8f0;
-}
-.rec-immediate { border-left-color:#dc2626; background:#fef2f2; }
-.rec-urgent    { border-left-color:#ea580c; background:#fff7ed; }
-.rec-high      { border-left-color:#eab308; background:#fefce8; }
-.rec-medium    { border-left-color:#3b82f6; background:#eff6ff; }
-.rec-review    { border-left-color:#94a3b8; background:#f8fafc; }
-.rec-priority  { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; }
-.rec-title     { font-size:0.8rem; font-weight:700; color:#0f172a; margin-bottom:3px; }
-.rec-body      { font-size:0.73rem; color:#374151; line-height:1.55; }
-.rec-driver    { font-size:0.7rem; color:#64748b; margin-top:5px; font-style:italic; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 def get_token():
+    # Streamlit Cloud: service principal via secrets
+    # Configure in app secrets: [azure] client_id / client_secret / tenant_id
     try:
         az = st.secrets["azure"]
         cred = ClientSecretCredential(az["tenant_id"], az["client_id"], az["client_secret"])
         return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
     except (KeyError, FileNotFoundError):
         pass
+
+    # Local dev: uses existing az login session
     try:
         cred = AzureCliCredential(tenant_id=TENANT_ID)
         return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
@@ -226,53 +189,35 @@ def strip_prefix(col):
     return col.split("[")[-1].rstrip("]") if "[" in col else col
 
 
-def _pbi_query(token, dax):
-    url  = (
+@st.cache_data(ttl=300)
+def fetch_budget_data(token):
+    t0  = time.time()
+    url = (
         f"https://api.powerbi.com/v1.0/myorg/groups/{WORKSPACE_ID}"
         f"/datasets/{DATASET_ID}/executeQueries"
     )
     resp = requests.post(
         url,
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json={"queries": [{"query": dax}], "serializerSettings": {"includeNulls": True}},
+        json={"queries": [{"query": "EVALUATE BudgetData"}], "serializerSettings": {"includeNulls": True}},
         timeout=30,
     )
     if resp.status_code == 401:
         st.error(f"Power BI API 401 — {resp.text}")
         st.stop()
     resp.raise_for_status()
-    rows = resp.json()["results"][0]["tables"][0].get("rows", [])
+    rows    = resp.json()["results"][0]["tables"][0].get("rows", [])
+    elapsed = round(time.time() - t0, 1)
     if not rows:
-        return pd.DataFrame()
+        return pd.DataFrame(), elapsed
     df         = pd.DataFrame(rows)
     df.columns = [strip_prefix(c) for c in df.columns]
-    return df
-
-
-@st.cache_data(ttl=300)
-def fetch_budget_data(token):
-    t0      = time.time()
-    df      = _pbi_query(token, "EVALUATE BudgetData")
-    elapsed = round(time.time() - t0, 1)
     return df, elapsed
 
 
-@st.cache_data(ttl=300)
-def fetch_service_data(token):
-    """Fetch SpendByService table — returns empty DataFrame if table not yet available."""
-    try:
-        df = _pbi_query(token, "EVALUATE SpendByService")
-        if not df.empty:
-            df["cost"]      = pd.to_numeric(df.get("cost", 0),      errors="coerce").fillna(0)
-            df["usageDate"] = pd.to_datetime(df.get("usageDate", pd.NaT), errors="coerce")
-        return df
-    except Exception:
-        return pd.DataFrame()
-
-
-# ── Load & normalise BudgetData ───────────────────────────────────────────────
-token        = get_token()
-df, elapsed  = fetch_budget_data(token)
+# ── Load & normalise data ─────────────────────────────────────────────────────
+token     = get_token()
+df, elapsed = fetch_budget_data(token)
 
 if df.empty:
     st.warning("No data returned from the Semantic Model. Run BudgetAnalyzer.py in Fabric first.")
@@ -321,8 +266,8 @@ except Exception:
 day_num = today.day
 day_pct = round(day_num / days_in_month * 100, 0)
 
-user_email = st.session_state.get("user_email", "anmol.sharma@milliman.com")
-generated  = datetime.now().strftime("%Y-%m-%d %H:%M")
+user_email  = st.session_state.get("user_email", "anmol.sharma@milliman.com")
+generated   = datetime.now().strftime("%Y-%m-%d %H:%M")
 
 # ── Banner ────────────────────────────────────────────────────────────────────
 st.markdown(f"""
@@ -445,7 +390,7 @@ with cnt_col:
     )
 
 
-# ── Build HTML table (unchanged) ──────────────────────────────────────────────
+# ── Build HTML table ──────────────────────────────────────────────────────────
 def badge_html(status):
     cls = {"OVER BUDGET": "badge-over", "CRITICAL": "badge-crit",
            "WARNING": "badge-warn", "WATCH": "badge-watch"}.get(status, "badge-ok")
@@ -502,7 +447,7 @@ for _, r in filtered.iterrows():
     a2days = r.get("alert2DaysAway")
     owners = [o.strip() for o in str(r.get("alert1Recipients", "") or "").split(";") if o.strip()]
 
-    bc      = bar_color(pct)
+    bc     = bar_color(pct)
     proj_bg = "rgba(239,68,68,0.22)" if proj > budget else "rgba(59,130,246,0.15)"
     bar_max = float(a2amt) if (a2amt and not math.isnan(a2amt)) else budget * 2.2
     bar_max = max(bar_max, actual * 1.05) if actual > 0 else max(bar_max, 1)
@@ -544,9 +489,11 @@ for _, r in filtered.iterrows():
     else:
         proj_cell = f"<span class='proj-ok'>${int(proj)}</span>"
 
-    rem_cell   = (f"<span class='neg'>${int(abs(rem))} deficit</span>"
-                  if rem < 0 else f"<span class='pos'>${int(rem)}</span>")
+    rem_cell = (f"<span class='neg'>${int(abs(rem))} deficit</span>"
+                if rem < 0 else f"<span class='pos'>${int(rem)}</span>")
+
     owner_html = "".join(f"<div class='ow'>{o}</div>" for o in owners) if owners else "<span class='na'>—</span>"
+
     tenant_div = f"<div class='stn'>{tenant}</div>" if tenant else ""
     sub_cell   = f"<div class='sn'>{sub}</div><div class='sf'>{full_sub}</div>{tenant_div}"
 
@@ -591,300 +538,8 @@ table_html = f"""
 </table>
 </div>
 """
+
 st.markdown(table_html, unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ── BURN RATE DRIVERS & RECOMMENDATIONS (new section) ─────────────────────────
-# ═══════════════════════════════════════════════════════════════════════════════
-
-st.markdown("---")
-st.markdown("<div class='section-label'>🔍 Burn Rate Drivers &amp; Recommendations</div>", unsafe_allow_html=True)
-
-svc_df = fetch_service_data(token)
-
-if svc_df.empty:
-    st.info(
-        "Service breakdown data is not yet available. "
-        "Run **FABRIC_BudgetAnalyzer_v2** in Fabric to populate the SpendByService table, "
-        "then refresh this page."
-    )
-else:
-    # ── Compute trend metrics from daily rows ──────────────────────────────────
-    # Split into two 30-day windows relative to today
-    from datetime import timedelta as _td
-    today_dt   = pd.Timestamp.now(tz="UTC").normalize().tz_localize(None)
-    cutoff_30  = today_dt - _td(days=30)   # boundary between current and prior 30d
-    cutoff_60  = today_dt - _td(days=60)
-
-    svc_df["usageDate"] = pd.to_datetime(svc_df["usageDate"], errors="coerce").dt.tz_localize(None)
-
-    curr_window = svc_df[svc_df["usageDate"] >= cutoff_30].copy()   # last 30 days
-    prev_window = svc_df[(svc_df["usageDate"] >= cutoff_60) & (svc_df["usageDate"] < cutoff_30)].copy()
-
-    # Per subscription + serviceFamily aggregates
-    curr_sf = curr_window.groupby(["subscription", "serviceFamily"])["cost"].sum().reset_index(name="curr30")
-    prev_sf = prev_window.groupby(["subscription", "serviceFamily"])["cost"].sum().reset_index(name="prev30")
-    sf_trend = pd.merge(curr_sf, prev_sf, on=["subscription", "serviceFamily"], how="left").fillna(0)
-
-    # % change 30d vs prev 30d
-    sf_trend["chg30"] = sf_trend.apply(
-        lambda r: round((r["curr30"] - r["prev30"]) / r["prev30"] * 100, 1) if r["prev30"] > 0 else None,
-        axis=1
-    )
-
-    # 7-day rolling average vs 30-day average (acceleration signal)
-    cutoff_7 = today_dt - _td(days=7)
-    last7  = svc_df[svc_df["usageDate"] >= cutoff_7].groupby(["subscription", "serviceFamily"])["cost"].mean().reset_index(name="avg7d")
-    last30 = curr_window.groupby(["subscription", "serviceFamily"])["cost"].mean().reset_index(name="avg30d")
-    accel  = pd.merge(last7, last30, on=["subscription", "serviceFamily"], how="left").fillna(0)
-    accel["accelPct"] = accel.apply(
-        lambda r: round((r["avg7d"] - r["avg30d"]) / r["avg30d"] * 100, 1) if r["avg30d"] > 0 else None,
-        axis=1
-    )
-
-    # Merge everything together
-    sf_full = sf_trend.merge(accel[["subscription", "serviceFamily", "avg7d", "avg30d", "accelPct"]],
-                              on=["subscription", "serviceFamily"], how="left")
-
-    # Per subscription + serviceFamily + meterCategory for drill-down
-    curr_mc = curr_window.groupby(["subscription", "serviceFamily", "meterCategory"])["cost"].sum().reset_index(name="curr30")
-    prev_mc = prev_window.groupby(["subscription", "serviceFamily", "meterCategory"])["cost"].sum().reset_index(name="prev30")
-    mc_trend = pd.merge(curr_mc, prev_mc, on=["subscription", "serviceFamily", "meterCategory"], how="left").fillna(0)
-    mc_trend["chg30"] = mc_trend.apply(
-        lambda r: round((r["curr30"] - r["prev30"]) / r["prev30"] * 100, 1) if r["prev30"] > 0 else None,
-        axis=1
-    )
-
-    # Service family colour palette (deterministic)
-    SF_COLORS = [
-        "#2563eb", "#ea580c", "#16a34a", "#9333ea", "#0891b2",
-        "#dc2626", "#ca8a04", "#0d9488", "#db2777", "#64748b",
-    ]
-
-    def sf_color(i):
-        return SF_COLORS[i % len(SF_COLORS)]
-
-    def trend_pill(pct):
-        if pct is None:
-            return "<span class='trend-flat'>N/A</span>"
-        arrow = "▲" if pct > 0 else "▼"
-        if pct > 5:
-            return f"<span class='trend-up'>{arrow} {abs(pct):.1f}%</span>"
-        if pct < -5:
-            return f"<span class='trend-dn'>{arrow} {abs(pct):.1f}%</span>"
-        return f"<span class='trend-flat'>≈ {pct:+.1f}%</span>"
-
-    def accel_pill(pct):
-        if pct is None or abs(pct) <= 10:
-            return ""
-        arrow = "▲" if pct > 0 else "▼"
-        return f"<span class='accel-warn'>7d avg {arrow}{abs(pct):.0f}% vs 30d</span>"
-
-    # ── Section tabs: Drivers | Recommendations ────────────────────────────────
-    tab_drivers, tab_recs = st.tabs(["📊 Burn Rate Drivers", "💡 Recommendations"])
-
-    # ── TAB 1: Burn Rate Drivers ───────────────────────────────────────────────
-    with tab_drivers:
-        # Subscription selector — default to top spenders / alert statuses
-        alert_subs  = df[df["_displayStatus"].isin(["OVER BUDGET", "CRITICAL", "WARNING", "WATCH"])]["subscription"].tolist()
-        all_svc_subs = sf_full["subscription"].unique().tolist()
-        # Pre-select subs that have alerts, capped at 10 so the UI isn't overwhelming
-        default_sel = [s for s in alert_subs if s in all_svc_subs][:10] or all_svc_subs[:5]
-
-        st.caption("SELECT SUBSCRIPTIONS TO ANALYSE")
-        selected_subs = st.multiselect(
-            "", all_svc_subs,
-            default=default_sel,
-            label_visibility="collapsed",
-            key="driver_sub_sel"
-        )
-
-        # Drill-down toggle
-        show_meter = st.toggle("Show MeterCategory drill-down", value=False, key="show_meter_toggle")
-
-        if not selected_subs:
-            st.info("Select at least one subscription above.")
-        else:
-            for sub_name in selected_subs:
-                sub_row = df[df["subscription"] == sub_name]
-                if sub_row.empty:
-                    continue
-                r           = sub_row.iloc[0]
-                budget_amt  = r.get("budgetAmount", 0) or 0
-                actual_amt  = r.get("actualSpend",  0) or 0
-                burn_rate   = r.get("dailyBurnRate", 0) or 0
-                remaining   = r.get("remainingUSD",  0) or 0
-                status      = str(r.get("_displayStatus", "OK"))
-                sub_display = sub_name.replace("MedInsight - ", "")
-
-                sub_sf = sf_full[sf_full["subscription"] == sub_name].sort_values("curr30", ascending=False)
-                if sub_sf.empty:
-                    continue
-
-                total_curr30 = sub_sf["curr30"].sum()
-
-                # Build ServiceFamily breakdown bars + trend pills
-                sf_bars_html = ""
-                for i, (_, sfr) in enumerate(sub_sf.iterrows()):
-                    share    = round(sfr["curr30"] / total_curr30 * 100, 1) if total_curr30 > 0 else 0
-                    color    = sf_color(i)
-                    t_pill   = trend_pill(sfr.get("chg30"))
-                    a_pill   = accel_pill(sfr.get("accelPct"))
-                    sf_bars_html += f"""
-<div class="sf-bar-wrap">
-  <div class="sf-bar-label">
-    <span style="font-weight:600">{sfr['serviceFamily']}</span>
-    <span>${sfr['curr30']:,.0f} &nbsp;({share}%) &nbsp;{t_pill}{a_pill}</span>
-  </div>
-  <div class="sf-bar-track">
-    <div class="sf-bar-fill" style="width:{share}%;background:{color}"></div>
-  </div>
-</div>"""
-
-                # MeterCategory drill-down (if toggled on)
-                mc_html = ""
-                if show_meter:
-                    sub_mc = mc_trend[mc_trend["subscription"] == sub_name].sort_values("curr30", ascending=False)
-                    if not sub_mc.empty:
-                        mc_html = "<div style='margin-top:12px;padding-top:10px;border-top:1px solid #f1f5f9'>"
-                        mc_html += "<div style='font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px'>MeterCategory Drill-down</div>"
-                        mc_total = sub_mc["curr30"].sum()
-                        for _, mcr in sub_mc.iterrows():
-                            mc_share = round(mcr["curr30"] / mc_total * 100, 1) if mc_total > 0 else 0
-                            mc_pill  = trend_pill(mcr.get("chg30"))
-                            mc_html += f"""
-<div class="sf-bar-wrap">
-  <div class="sf-bar-label">
-    <span style="color:#475569">{mcr['serviceFamily']} &rsaquo; {mcr['meterCategory']}</span>
-    <span>${mcr['curr30']:,.0f} &nbsp;({mc_share}%) &nbsp;{mc_pill}</span>
-  </div>
-  <div class="sf-bar-track">
-    <div class="sf-bar-fill" style="width:{mc_share}%;background:#94a3b8"></div>
-  </div>
-</div>"""
-                        mc_html += "</div>"
-
-                st.markdown(f"""
-<div class="driver-card">
-  <div class="driver-sub-name">{sub_display} &nbsp;<span style="font-size:10px;font-weight:400;color:#64748b">{status}</span></div>
-  <div class="driver-sub-meta">
-    Budget: ${budget_amt:,.0f} &nbsp;·&nbsp;
-    Actual MTD: ${actual_amt:,.0f} &nbsp;·&nbsp;
-    Burn: ${burn_rate:,.0f}/day &nbsp;·&nbsp;
-    Remaining: ${remaining:,.0f}
-  </div>
-  <div class="driver-card-title">ServiceFamily breakdown — last 30 days &nbsp;
-    <span style="font-size:10px;font-weight:400;color:#94a3b8">(trend = vs prior 30 days)</span>
-  </div>
-  {sf_bars_html}
-  {mc_html}
-</div>
-""", unsafe_allow_html=True)
-
-    # ── TAB 2: Recommendations ─────────────────────────────────────────────────
-    with tab_recs:
-        st.caption("Prioritised, logic-driven recommendations based on burn rate, service family trends, and budget status.")
-
-        rec_items = []   # list of (sort_order, html)
-
-        for _, r in df.iterrows():
-            sub_name    = str(r.get("subscription", ""))
-            sub_display = sub_name.replace("MedInsight - ", "")
-            status      = str(r.get("_displayStatus", "OK"))
-            budget_amt  = float(r.get("budgetAmount",  0) or 0)
-            actual_amt  = float(r.get("actualSpend",   0) or 0)
-            burn_rate   = float(r.get("dailyBurnRate", 0) or 0)
-            remaining   = float(r.get("remainingUSD",  0) or 0)
-            days_rem    = float(r.get("daysRemaining", 0) or 0)
-            proj_eom    = float(r.get("projectedEOM",  0) or 0)
-            owners_str  = str(r.get("alert1Recipients", "") or "")
-
-            # Safe burn = amount we can spend per day to stay within budget
-            safe_burn = (remaining / days_rem) if days_rem > 0 and remaining > 0 else 0
-            overrun   = max(proj_eom - budget_amt, 0)
-
-            # Top contributing service family for this sub (current 30d)
-            sub_sf       = sf_full[sf_full["subscription"] == sub_name].sort_values("curr30", ascending=False)
-            top_sf_name  = sub_sf.iloc[0]["serviceFamily"] if not sub_sf.empty else None
-            top_sf_curr  = sub_sf.iloc[0]["curr30"]        if not sub_sf.empty else 0
-            top_sf_chg   = sub_sf.iloc[0].get("chg30")     if not sub_sf.empty else None
-            top_sf_accel = sub_sf.iloc[0].get("accelPct")  if not sub_sf.empty else None
-            top_sf_share = round(top_sf_curr / sub_sf["curr30"].sum() * 100, 0) if not sub_sf.empty and sub_sf["curr30"].sum() > 0 else 0
-
-            # Build driver context string
-            driver_ctx = ""
-            if top_sf_name:
-                chg_str   = f"{top_sf_chg:+.1f}% vs prior 30d" if top_sf_chg is not None else "no prior data"
-                accel_str = (f", 7d avg is {top_sf_accel:+.0f}% vs 30d avg (accelerating)" if top_sf_accel and abs(top_sf_accel) > 10 else "")
-                driver_ctx = f"Top driver: <b>{top_sf_name}</b> ({int(top_sf_share)}% of MTD spend, {chg_str}{accel_str})."
-
-            # ── Priority: IMMEDIATE — already over budget ──────────────────────
-            if status == "OVER BUDGET":
-                deficit   = actual_amt - budget_amt
-                body      = (
-                    f"Exceeded budget by <b>${deficit:,.0f}</b>. "
-                    f"Current burn of <b>${burn_rate:,.0f}/day</b> must be stopped or drastically reduced. "
-                    f"Projected month-end: <b>${proj_eom:,.0f}</b> (+${overrun:,.0f} over budget)."
-                )
-                if owners_str:
-                    body += f" Notify: {owners_str}."
-                rec_items.append((0, status, sub_display, "IMMEDIATE", "rec-immediate", "🔴 Budget Exceeded", body, driver_ctx))
-
-            # ── Priority: URGENT — critical threshold crossed ──────────────────
-            elif status == "CRITICAL":
-                body = (
-                    f"At <b>{r.get('pctUsed', 0):.1f}%</b> of budget with <b>{int(days_rem)} days</b> left. "
-                    f"Must reduce from <b>${burn_rate:,.0f}/day</b> to <b>${safe_burn:,.0f}/day</b> "
-                    f"to stay within budget. Projected overrun: <b>${overrun:,.0f}</b>."
-                )
-                rec_items.append((1, status, sub_display, "URGENT", "rec-urgent", "🟠 Critical Threshold", body, driver_ctx))
-
-            # ── Priority: HIGH — warning threshold or accelerating service ─────
-            elif status in ("WARNING", "WATCH"):
-                body = (
-                    f"Projected to exceed budget by <b>${overrun:,.0f}</b> at current pace. "
-                    f"Reduce daily burn from <b>${burn_rate:,.0f}</b> to <b>${safe_burn:,.0f}</b> "
-                    f"to finish the month within budget."
-                )
-                # Escalate to HIGH if a service family is accelerating strongly
-                accel_flag = top_sf_accel is not None and abs(top_sf_accel) > 20
-                priority   = "HIGH" if accel_flag else "MEDIUM"
-                css_class  = "rec-high" if accel_flag else "rec-medium"
-                label      = "🟡 Warning / Watch" if not accel_flag else "🟡 Warning — Accelerating Spend"
-                rec_items.append((2 if accel_flag else 3, status, sub_display, priority, css_class, label, body, driver_ctx))
-
-            # ── Priority: REVIEW — ok but top-5 org burn contributor ──────────
-            else:
-                top5_burn = df.nlargest(5, "dailyBurnRate")["subscription"].tolist()
-                if sub_name in top5_burn and total_burn > 0:
-                    burn_share = round(burn_rate / total_burn * 100, 1)
-                    body       = (
-                        f"Status is OK but accounts for <b>{burn_share}%</b> of total org daily burn "
-                        f"(<b>${burn_rate:,.0f}/day</b>). Monitor for unexpected increases."
-                    )
-                    rec_items.append((4, status, sub_display, "REVIEW", "rec-review", "⚪ Top Burn Contributor", body, driver_ctx))
-
-        if not rec_items:
-            st.success("All subscriptions are within budget with no accelerating trends detected.")
-        else:
-            rec_items.sort(key=lambda x: x[0])
-            for _, status, sub_display, priority, css_class, label, body, driver_ctx in rec_items:
-                priority_colors = {
-                    "IMMEDIATE": "#dc2626", "URGENT": "#ea580c",
-                    "HIGH": "#ca8a04",      "MEDIUM": "#2563eb", "REVIEW": "#64748b"
-                }
-                p_color  = priority_colors.get(priority, "#64748b")
-                dc_block = f"<div class='rec-driver'>{driver_ctx}</div>" if driver_ctx else ""
-                st.markdown(f"""
-<div class="rec-card {css_class}">
-  <div class="rec-priority" style="color:{p_color}">{priority} &mdash; {label}</div>
-  <div class="rec-title">{sub_display}</div>
-  <div class="rec-body">{body}</div>
-  {dc_block}
-</div>
-""", unsafe_allow_html=True)
-
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown(f"""

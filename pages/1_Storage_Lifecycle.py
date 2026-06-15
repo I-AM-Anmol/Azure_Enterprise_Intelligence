@@ -597,6 +597,68 @@ else:
 
         st.markdown("<br>", unsafe_allow_html=True)
 
+        # ── Cost savings estimate ─────────────────────────────────────────────
+        # Azure LRS West US list prices per GB/month
+        HOT_PRICE, COOL_PRICE, COLD_PRICE, ARCHIVE_PRICE = 0.0184, 0.0100, 0.0045, 0.00099
+        current_cost = (
+            hot_tb     * 1024 * HOT_PRICE +
+            cool_tb    * 1024 * COOL_PRICE +
+            cold_tb    * 1024 * COLD_PRICE +
+            archive_tb * 1024 * ARCHIVE_PRICE
+        )
+        # Conservative: 60% of Hot-tier data is cool-eligible (not accessed in 30+ days)
+        optimized_cost = (
+            (hot_tb * 0.4)              * 1024 * HOT_PRICE +
+            (cool_tb + hot_tb * 0.6)   * 1024 * COOL_PRICE +
+            cold_tb                    * 1024 * COLD_PRICE +
+            archive_tb                 * 1024 * ARCHIVE_PRICE
+        )
+        potential_saving = current_cost - optimized_cost
+        saving_pct       = round(potential_saving / current_cost * 100, 1) if current_cost > 0 else 0
+        annual_saving    = potential_saving * 12
+
+        st.markdown('<div class="section-label">Cost Opportunity — Tier Right-Sizing Estimate</div>', unsafe_allow_html=True)
+        cs1, cs2, cs3, cs4 = st.columns(4)
+        with cs1:
+            st.markdown(f"""<div class="kpi-card">
+                <div class="kpi-icon">💵</div>
+                <div class="kpi-value">${current_cost:,.0f}</div>
+                <div class="kpi-label">Est. Monthly Storage Cost</div>
+                <div class="kpi-sub">Current tier mix · LRS list price</div>
+            </div>""", unsafe_allow_html=True)
+        with cs2:
+            st.markdown(f"""<div class="kpi-card cool">
+                <div class="kpi-icon">🎯</div>
+                <div class="kpi-value cool">${optimized_cost:,.0f}</div>
+                <div class="kpi-label">Est. Cost After Right-Sizing</div>
+                <div class="kpi-sub">60% of Hot moved to Cool</div>
+            </div>""", unsafe_allow_html=True)
+        with cs3:
+            st.markdown(f"""<div class="kpi-card green">
+                <div class="kpi-icon">📉</div>
+                <div class="kpi-value green">${potential_saving:,.0f}</div>
+                <div class="kpi-label">Potential Monthly Saving</div>
+                <div class="kpi-sub">{saving_pct}% reduction · conservative</div>
+            </div>""", unsafe_allow_html=True)
+        with cs4:
+            st.markdown(f"""<div class="kpi-card green">
+                <div class="kpi-icon">📅</div>
+                <div class="kpi-value green">${annual_saving:,.0f}</div>
+                <div class="kpi-label">Potential Annual Saving</div>
+                <div class="kpi-sub">Via lifecycle policy automation</div>
+            </div>""", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="font-size:0.71rem;color:#94a3b8;margin:6px 0 4px 2px;">
+            Estimates use Azure LRS West US list prices &nbsp;·&nbsp;
+            Hot $0.0184/GB &nbsp;·&nbsp; Cool $0.0100/GB &nbsp;·&nbsp;
+            Cold $0.0045/GB &nbsp;·&nbsp; Archive $0.00099/GB &nbsp;·&nbsp;
+            Assumes 60% of Hot-tier data not accessed in 30+ days is cool-eligible.
+            Actual savings depend on access patterns and redundancy tier.
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
         # ── Charts row ────────────────────────────────────────────────────────
         chart_col, donut_col = st.columns([7, 3])
 
