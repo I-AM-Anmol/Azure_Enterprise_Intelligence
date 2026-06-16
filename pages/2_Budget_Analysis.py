@@ -611,16 +611,21 @@ if svc_df.empty:
     )
 else:
     # ── Compute trend metrics from daily rows ──────────────────────────────────
-    # Split into two 30-day windows relative to today
+    # Split into two windows relative to today.
+    # curr_window = last 30 days (or all available data if sub has < 30 days of rows)
+    # prev_window = prior 30 days (days 31-60)
     from datetime import timedelta as _td
     today_dt   = pd.Timestamp.now(tz="UTC").normalize().tz_localize(None)
-    cutoff_30  = today_dt - _td(days=30)   # boundary between current and prior 30d
+    cutoff_30  = today_dt - _td(days=30)
     cutoff_60  = today_dt - _td(days=60)
 
     svc_df["usageDate"] = pd.to_datetime(svc_df["usageDate"], errors="coerce").dt.tz_localize(None)
 
-    curr_window = svc_df[svc_df["usageDate"] >= cutoff_30].copy()   # last 30 days
-    prev_window = svc_df[(svc_df["usageDate"] >= cutoff_60) & (svc_df["usageDate"] < cutoff_30)].copy()
+    # Use the full 60-day dataset as curr_window so subscriptions whose spend
+    # dates fall between day 31-60 (e.g. older data, low-frequency billing) are
+    # still included. prev_window uses only days 31-60 for trend comparison.
+    curr_window = svc_df[svc_df["usageDate"] >= cutoff_60].copy()   # all 60 days
+    prev_window = svc_df[(svc_df["usageDate"] >= cutoff_60) & (svc_df["usageDate"] < cutoff_30)].copy()  # days 31-60
 
     # Per subscription + serviceFamily aggregates
     curr_sf = curr_window.groupby(["subscription", "serviceFamily"])["cost"].sum().reset_index(name="curr30")
@@ -633,7 +638,7 @@ else:
         axis=1
     )
 
-    # 7-day rolling average vs 30-day average (acceleration signal)
+    # 7-day rolling average vs 60-day average (acceleration signal)
     cutoff_7 = today_dt - _td(days=7)
     last7  = svc_df[svc_df["usageDate"] >= cutoff_7].groupby(["subscription", "serviceFamily"])["cost"].mean().reset_index(name="avg7d")
     last30 = curr_window.groupby(["subscription", "serviceFamily"])["cost"].mean().reset_index(name="avg30d")
@@ -679,7 +684,7 @@ else:
         if pct is None or abs(pct) <= 10:
             return ""
         arrow = "▲" if pct > 0 else "▼"
-        return f"<span class='accel-warn'>7d avg {arrow}{abs(pct):.0f}% vs 30d</span>"
+        return f"<span class='accel-warn'>7d avg {arrow}{abs(pct):.0f}% vs 60d</span>"
 
     # ── Section tabs: Drivers | Recommendations ────────────────────────────────
     tab_drivers, tab_recs = st.tabs(["📊 Burn Rate Drivers", "💡 Recommendations"])
