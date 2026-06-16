@@ -263,8 +263,9 @@ def fetch_service_data(token):
     try:
         df = _pbi_query(token, "EVALUATE SpendByService")
         if not df.empty:
-            df["cost"]      = pd.to_numeric(df.get("cost", 0),      errors="coerce").fillna(0)
-            df["usageDate"] = pd.to_datetime(df.get("usageDate", pd.NaT), errors="coerce")
+            df["cost"]      = pd.to_numeric(df.get("cost", 0), errors="coerce").fillna(0)
+            # Parse and strip timezone so window comparisons work consistently
+            df["usageDate"] = pd.to_datetime(df.get("usageDate", pd.NaT), errors="coerce").dt.tz_localize(None)
         return df
     except Exception:
         return pd.DataFrame()
@@ -619,7 +620,7 @@ else:
     cutoff_30  = today_dt - _td(days=30)
     cutoff_60  = today_dt - _td(days=60)
 
-    svc_df["usageDate"] = pd.to_datetime(svc_df["usageDate"], errors="coerce").dt.tz_localize(None)
+    # usageDate already parsed and tz-stripped in fetch_service_data
 
     # Use the full 60-day dataset as curr_window so subscriptions whose spend
     # dates fall between day 31-60 (e.g. older data, low-frequency billing) are
