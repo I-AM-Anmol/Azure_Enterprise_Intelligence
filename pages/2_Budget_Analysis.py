@@ -226,7 +226,7 @@ def strip_prefix(col):
     return col.split("[")[-1].rstrip("]") if "[" in col else col
 
 
-def _pbi_query(token, dax):
+def _pbi_query(token, dax, timeout=120):
     url  = (
         f"https://api.powerbi.com/v1.0/myorg/groups/{WORKSPACE_ID}"
         f"/datasets/{DATASET_ID}/executeQueries"
@@ -235,7 +235,7 @@ def _pbi_query(token, dax):
         url,
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         json={"queries": [{"query": dax}], "serializerSettings": {"includeNulls": True}},
-        timeout=30,
+        timeout=timeout,
     )
     if resp.status_code == 401:
         st.error(f"Power BI API 401 — {resp.text}")
@@ -257,11 +257,26 @@ def fetch_budget_data(token):
     return df, elapsed
 
 
+# Pre-aggregated DAX — returns ~3K rows instead of 152K raw rows.
+# Aggregates cost per subscription + serviceFamily + meterCategory + usageDate,
+# avoiding a full table scan over the wire on every page load.
+_SVC_DAX = """
+EVALUATE
+SUMMARIZECOLUMNS(
+    SpendByService[subscription],
+    SpendByService[tenantName],
+    SpendByService[serviceFamily],
+    SpendByService[meterCategory],
+    SpendByService[usageDate],
+    "cost", SUM(SpendByService[cost])
+)
+"""
+
 @st.cache_data(ttl=300)
 def fetch_service_data(token):
-    """Fetch SpendByService table — returns empty DataFrame if table not yet available."""
+    """Fetch pre-aggregated SpendByService — returns empty DataFrame if table not yet available."""
     try:
-        df = _pbi_query(token, "EVALUATE SpendByService")
+        df = _pbi_query(token, _SVC_DAX, timeout=180)
         if not df.empty:
             df["cost"]      = pd.to_numeric(df.get("cost", 0), errors="coerce").fillna(0)
             # Parse and strip timezone so window comparisons work consistently
