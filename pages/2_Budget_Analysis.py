@@ -686,15 +686,23 @@ else:
 
     # ── TAB 1: Burn Rate Drivers ───────────────────────────────────────────────
     with tab_drivers:
-        # Subscription selector — default to top spenders / alert statuses
-        alert_subs  = df[df["_displayStatus"].isin(["OVER BUDGET", "CRITICAL", "WARNING", "WATCH"])]["subscription"].tolist()
-        all_svc_subs = sf_full["subscription"].unique().tolist()
-        # Pre-select subs that have alerts, capped at 10 so the UI isn't overwhelming
-        default_sel = [s for s in alert_subs if s in all_svc_subs][:10] or all_svc_subs[:5]
+        # Union of BudgetData + SpendByService subscriptions, sorted.
+        # BudgetData only contains subs with a budget configured.
+        # SpendByService contains subs with actual spend in the last 60 days.
+        # A sub may appear in SpendByService but not BudgetData (no budget set up),
+        # so we combine both to ensure nothing is hidden from the selector.
+        budget_subs_set = set(df["subscription"].tolist())
+        svc_subs_set    = set(sf_full["subscription"].unique())
+        all_budget_subs = sorted(budget_subs_set | svc_subs_set)
+
+        # Default: top 5 by actual spend that have service breakdown data.
+        # Keeping default small so the view isn't overwhelming — user can search and add more.
+        top_spenders = df[df["subscription"].isin(svc_subs_set)].nlargest(5, "actualSpend")["subscription"].tolist()
+        default_sel  = top_spenders
 
         st.caption("SELECT SUBSCRIPTIONS TO ANALYSE")
         selected_subs = st.multiselect(
-            "", all_svc_subs,
+            "", all_budget_subs,
             default=default_sel,
             label_visibility="collapsed",
             key="driver_sub_sel"
@@ -708,18 +716,31 @@ else:
         else:
             for sub_name in selected_subs:
                 sub_row = df[df["subscription"] == sub_name]
+                # Sub may have spend data but no budget configured — still show the card
                 if sub_row.empty:
-                    continue
-                r           = sub_row.iloc[0]
-                budget_amt  = r.get("budgetAmount", 0) or 0
-                actual_amt  = r.get("actualSpend",  0) or 0
-                burn_rate   = r.get("dailyBurnRate", 0) or 0
-                remaining   = r.get("remainingUSD",  0) or 0
-                status      = str(r.get("_displayStatus", "OK"))
+                    budget_amt  = 0
+                    actual_amt  = 0
+                    burn_rate   = 0
+                    remaining   = 0
+                    status      = "NO BUDGET"
+                else:
+                    r           = sub_row.iloc[0]
+                    budget_amt  = r.get("budgetAmount", 0) or 0
+                    actual_amt  = r.get("actualSpend",  0) or 0
+                    burn_rate   = r.get("dailyBurnRate", 0) or 0
+                    remaining   = r.get("remainingUSD",  0) or 0
+                    status      = str(r.get("_displayStatus", "OK"))
                 sub_display = sub_name.replace("MedInsight - ", "")
 
                 sub_sf = sf_full[sf_full["subscription"] == sub_name].sort_values("curr30", ascending=False)
                 if sub_sf.empty:
+                    # Sub exists in BudgetData but has no spend in SpendByService
+                    st.markdown(f"""
+<div class="driver-card">
+  <div class="driver-sub-name">{sub_display} &nbsp;<span style="font-size:10px;font-weight:400;color:#64748b">{status}</span></div>
+  <div class="driver-sub-meta">Budget: ${budget_amt:,.0f} &nbsp;·&nbsp; Actual MTD: ${actual_amt:,.0f} &nbsp;·&nbsp; Burn: ${burn_rate:,.0f}/day</div>
+  <div style="font-size:0.75rem;color:#94a3b8;margin-top:6px;">No spend recorded in the last 60 days — no service breakdown available.</div>
+</div>""", unsafe_allow_html=True)
                     continue
 
                 total_curr30 = sub_sf["curr30"].sum()
