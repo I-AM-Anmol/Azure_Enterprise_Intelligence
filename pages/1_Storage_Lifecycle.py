@@ -606,18 +606,49 @@ else:
             cold_tb    * 1024 * COLD_PRICE +
             archive_tb * 1024 * ARCHIVE_PRICE
         )
-        # Conservative: 60% of Hot-tier data is cool-eligible (not accessed in 30+ days)
+        st.markdown('<div class="section-label">Cost Opportunity — Tier Right-Sizing Estimate</div>', unsafe_allow_html=True)
+
+        # ── Assumption slider ─────────────────────────────────────────────────
+        slider_col, label_col = st.columns([5, 3])
+        with slider_col:
+            cool_pct_int = st.slider(
+                "% of Hot-tier data eligible to move to Cool (not accessed in 30+ days)",
+                min_value=10, max_value=90, value=60, step=5,
+                help=(
+                    "Microsoft benchmark: 50–70% for typical enterprise workloads. "
+                    "Increase for archival/ETL-heavy environments; decrease for frequently-read datasets. "
+                    "Enable Last Access Time tracking on storage accounts for an exact figure."
+                ),
+                key="hot_cool_pct_slider",
+            )
+        cool_pct = cool_pct_int / 100
+        if cool_pct_int <= 39:
+            scenario_label = "Conservative estimate"
+            scenario_color = "#64748b"
+        elif cool_pct_int <= 69:
+            scenario_label = "Moderate estimate"
+            scenario_color = "#2563eb"
+        else:
+            scenario_label = "Aggressive estimate"
+            scenario_color = "#f97316"
+        with label_col:
+            st.markdown(
+                f"<div style='padding-top:28px;font-size:0.78rem;font-weight:700;"
+                f"color:{scenario_color}'>{scenario_label}</div>",
+                unsafe_allow_html=True,
+            )
+
+        # ── Recalculate with slider value ─────────────────────────────────────
         optimized_cost = (
-            (hot_tb * 0.4)              * 1024 * HOT_PRICE +
-            (cool_tb + hot_tb * 0.6)   * 1024 * COOL_PRICE +
-            cold_tb                    * 1024 * COLD_PRICE +
-            archive_tb                 * 1024 * ARCHIVE_PRICE
+            (hot_tb * (1 - cool_pct))         * 1024 * HOT_PRICE +
+            (cool_tb + hot_tb * cool_pct)     * 1024 * COOL_PRICE +
+            cold_tb                           * 1024 * COLD_PRICE +
+            archive_tb                        * 1024 * ARCHIVE_PRICE
         )
         potential_saving = current_cost - optimized_cost
         saving_pct       = round(potential_saving / current_cost * 100, 1) if current_cost > 0 else 0
         annual_saving    = potential_saving * 12
 
-        st.markdown('<div class="section-label">Cost Opportunity — Tier Right-Sizing Estimate</div>', unsafe_allow_html=True)
         cs1, cs2, cs3, cs4 = st.columns(4)
         with cs1:
             st.markdown(f"""<div class="kpi-card">
@@ -631,14 +662,14 @@ else:
                 <div class="kpi-icon">🎯</div>
                 <div class="kpi-value cool">${optimized_cost:,.0f}</div>
                 <div class="kpi-label">Est. Cost After Right-Sizing</div>
-                <div class="kpi-sub">60% of Hot moved to Cool</div>
+                <div class="kpi-sub">{cool_pct_int}% of Hot moved to Cool</div>
             </div>""", unsafe_allow_html=True)
         with cs3:
             st.markdown(f"""<div class="kpi-card green">
                 <div class="kpi-icon">📉</div>
                 <div class="kpi-value green">${potential_saving:,.0f}</div>
                 <div class="kpi-label">Potential Monthly Saving</div>
-                <div class="kpi-sub">{saving_pct}% reduction · conservative</div>
+                <div class="kpi-sub">{saving_pct}% reduction · {scenario_label.lower()}</div>
             </div>""", unsafe_allow_html=True)
         with cs4:
             st.markdown(f"""<div class="kpi-card green">
@@ -647,13 +678,14 @@ else:
                 <div class="kpi-label">Potential Annual Saving</div>
                 <div class="kpi-sub">Via lifecycle policy automation</div>
             </div>""", unsafe_allow_html=True)
-        st.markdown("""
+        st.markdown(f"""
         <div style="font-size:0.71rem;color:#94a3b8;margin:6px 0 4px 2px;">
             Estimates use Azure LRS West US list prices &nbsp;·&nbsp;
             Hot $0.0184/GB &nbsp;·&nbsp; Cool $0.0100/GB &nbsp;·&nbsp;
             Cold $0.0045/GB &nbsp;·&nbsp; Archive $0.00099/GB &nbsp;·&nbsp;
-            Assumes 60% of Hot-tier data not accessed in 30+ days is cool-eligible.
+            Assumes {cool_pct_int}% of Hot-tier data not accessed in 30+ days is cool-eligible ({scenario_label.lower()}).
             Actual savings depend on access patterns and redundancy tier.
+            Enable <strong>Last Access Time tracking</strong> on storage accounts for a data-driven figure.
         </div>
         """, unsafe_allow_html=True)
 
