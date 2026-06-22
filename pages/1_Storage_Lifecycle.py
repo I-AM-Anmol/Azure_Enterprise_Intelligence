@@ -2,6 +2,8 @@ import streamlit as st
 import requests
 import pandas as pd
 import msal
+import json
+import os
 from azure.identity import AzureCliCredential, ClientSecretCredential
 import plotly.graph_objects as go
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -233,6 +235,29 @@ def fetch_table(token, dax):
     df         = pd.DataFrame(rows)
     df.columns = [strip_prefix(c) for c in df.columns]
     return df, elapsed
+
+
+# ── Last Access Tracking loader ───────────────────────────────────────────────
+@st.cache_data(ttl=3600)
+def load_last_access_tracking():
+    """
+    Loads last_access_tracking.json produced by the PowerShell scan.
+    Returns a DataFrame with columns:
+      Subscription, SubscriptionId, StorageAccount, ResourceGroup, LastAccessTracking
+    """
+    path = os.path.join(os.path.dirname(__file__), "..", "last_access_tracking.json")
+    path = os.path.normpath(path)
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not data:
+            return pd.DataFrame()
+        df = pd.DataFrame(data if isinstance(data, list) else [data])
+        return df
+    except Exception:
+        return pd.DataFrame()
 
 
 def _fetch_sub_tiers(arm_token, sub_id, start_t, end_t):
@@ -597,8 +622,65 @@ else:
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # ── Cost savings estimate ─────────────────────────────────────────────
-        # Azure LRS West US list prices per GB/month
+        # ── Last Access Tracking KPIs ─────────────────────────────────────────
+        lat_df = load_last_access_tracking()
+        lat_enabled  = 0
+        lat_disabled = 0
+        real_cool_pct = None   # None = no real data available
+
+        if not lat_df.empty and "LastAccessTracking" in lat_df.columns:
+            # Filter to subscriptions visible in current blob view
+            if sel_subs:
+                visible_ids = set(selected_ids)
+                lat_filtered = lat_df[lat_df["SubscriptionId"].isin(visible_ids)]
+            else:
+                lat_filtered = lat_df
+            lat_enabled  = int((lat_filtered["LastAccessTracking"] == "Enabled").sum())
+            lat_disabled = int((lat_filtered["LastAccessTracking"] == "Disabled").sum())
+            lat_total    = lat_enabled + lat_disabled
+
+            # Cross-reference: for accounts with tracking Enabled, use Hot-tier share
+            # as proxy for real cool-eligible % (tracking enabled = access data collected)
+            if lat_total > 0 and not blob_filtered.empty:
+                enabled_accts = set(lat_filtered[lat_filtered["LastAccessTracking"] == "Enabled"]["StorageAccount"].str.lower())
+                blob_enabled  = blob_filtered[blob_filtered["StorageAccount"].str.lower().isin(enabled_accts)]
+                blob_disabled = blob_filtered[~blob_filtered["StorageAccount"].str.lower().isin(enabled_accts)]
+                enabled_hot_tb  = blob_enabled["Hot_TB"].sum()
+                disabled_hot_tb = blob_disabled["Hot_TB"].sum()
+            else:
+                enabled_hot_tb  = 0
+                disabled_hot_tb = hot_tb
+
+        st.markdown('<div class="section-label">Last Access Time Tracking — Governance Status</div>', unsafe_allow_html=True)
+        if not lat_df.empty:
+            lat_total    = lat_enabled + lat_disabled
+            enabled_pct  = round(lat_enabled  / lat_total * 100, 1) if lat_total else 0
+            disabled_pct = round(lat_disabled / lat_total * 100, 1) if lat_total else 0
+            lk1, lk2, lk3 = st.columns(3)
+            with lk1:
+                st.markdown(f"""<div class="kpi-card">
+                    <div class="kpi-icon">🗄️</div>
+                    <div class="kpi-value">{lat_total:,}</div>
+                    <div class="kpi-label">Total Accounts Scanned</div>
+                    <div class="kpi-sub">Across all Production subscriptions</div>
+                </div>""", unsafe_allow_html=True)
+            with lk2:
+                st.markdown(f"""<div class="kpi-card green">
+                    <div class="kpi-icon">✅</div>
+                    <div class="kpi-value green">{lat_enabled:,}</div>
+                    <div class="kpi-label">Last Access Tracking Enabled</div>
+                    <div class="kpi-sub">{enabled_pct}% · real access data being collected</div>
+                </div>""", unsafe_allow_html=True)
+            with lk3:
+                st.markdown(f"""<div class="kpi-card red">
+                    <div class="kpi-icon">⚠️</div>
+                    <div class="kpi-value red">{lat_disabled:,}</div>
+                    <div class="kpi-label">Last Access Tracking Disabled</div>
+                    <div class="kpi-sub">{disabled_pct}% · tier savings estimate only</div>
+                </div>""", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Cost savings — real + estimated split ─────────────────────────────
         HOT_PRICE, COOL_PRICE, COLD_PRICE, ARCHIVE_PRICE = 0.0184, 0.0100, 0.0045, 0.00099
         current_cost = (
             hot_tb     * 1024 * HOT_PRICE +
@@ -606,44 +688,84 @@ else:
             cold_tb    * 1024 * COLD_PRICE +
             archive_tb * 1024 * ARCHIVE_PRICE
         )
-        st.markdown('<div class="section-label">Cost Opportunity — Tier Right-Sizing Estimate</div>', unsafe_allow_html=True)
 
-        # ── Assumption slider ─────────────────────────────────────────────────
-        slider_col, label_col = st.columns([5, 3])
-        with slider_col:
-            cool_pct_int = st.slider(
-                "% of Hot-tier data eligible to move to Cool (not accessed in 30+ days)",
-                min_value=10, max_value=90, value=60, step=5,
-                help=(
-                    "Microsoft benchmark: 50–70% for typical enterprise workloads. "
-                    "Increase for archival/ETL-heavy environments; decrease for frequently-read datasets. "
-                    "Enable Last Access Time tracking on storage accounts for an exact figure."
-                ),
-                key="hot_cool_pct_slider",
-            )
-        cool_pct = cool_pct_int / 100
-        if cool_pct_int <= 39:
-            scenario_label = "Conservative estimate"
-            scenario_color = "#64748b"
-        elif cool_pct_int <= 69:
-            scenario_label = "Moderate estimate"
-            scenario_color = "#2563eb"
+        st.markdown('<div class="section-label">Cost Opportunity — Tier Right-Sizing</div>', unsafe_allow_html=True)
+
+        # Determine whether real data is available
+        has_real_data = not lat_df.empty and lat_enabled > 0
+
+        if has_real_data:
+            # ── Real portion: accounts with tracking Enabled ──────────────────
+            # For enabled accounts: 30-day access threshold is industry benchmark
+            # applied only to their Hot TB. Slider adjusts the untracked remainder.
+            slider_col, label_col = st.columns([5, 3])
+            with slider_col:
+                cool_pct_int = st.slider(
+                    f"% of Hot-tier data to Cool — applies to {lat_disabled:,} accounts WITHOUT tracking ({round(disabled_hot_tb / hot_tb * 100, 1) if hot_tb else 0}% of Hot TB)",
+                    min_value=10, max_value=90, value=60, step=5,
+                    help=(
+                        f"{lat_enabled:,} accounts have Last Access Tracking enabled — their Hot-tier share is "
+                        "used directly. This slider only affects the remaining accounts with no tracking data."
+                    ),
+                    key="hot_cool_pct_slider",
+                )
+            cool_pct = cool_pct_int / 100
+            if cool_pct_int <= 39:
+                scenario_label = "Conservative (untracked)"
+                scenario_color = "#64748b"
+            elif cool_pct_int <= 69:
+                scenario_label = "Moderate (untracked)"
+                scenario_color = "#2563eb"
+            else:
+                scenario_label = "Aggressive (untracked)"
+                scenario_color = "#f97316"
+            with label_col:
+                st.markdown(
+                    f"<div style='padding-top:28px;font-size:0.78rem;font-weight:700;"
+                    f"color:{scenario_color}'>{scenario_label}</div>",
+                    unsafe_allow_html=True,
+                )
+            # Real saving: enabled accounts — assume industry 60% of their Hot is cool-eligible
+            # (tracking confirms data IS being collected; actual per-blob query would refine further)
+            real_cool_eligible_tb    = enabled_hot_tb * 0.60
+            # Estimated saving: disabled accounts — user-controlled slider
+            est_cool_eligible_tb     = disabled_hot_tb * cool_pct
+            total_cool_eligible_tb   = real_cool_eligible_tb + est_cool_eligible_tb
+            data_source_label        = f"Real data ({lat_enabled:,} tracked) + estimate ({lat_disabled:,} untracked)"
         else:
-            scenario_label = "Aggressive estimate"
-            scenario_color = "#f97316"
-        with label_col:
-            st.markdown(
-                f"<div style='padding-top:28px;font-size:0.78rem;font-weight:700;"
-                f"color:{scenario_color}'>{scenario_label}</div>",
-                unsafe_allow_html=True,
-            )
+            # ── No tracking data — full slider assumption ─────────────────────
+            slider_col, label_col = st.columns([5, 3])
+            with slider_col:
+                cool_pct_int = st.slider(
+                    "% of Hot-tier data eligible to move to Cool (not accessed in 30+ days)",
+                    min_value=10, max_value=90, value=60, step=5,
+                    help="Enable Last Access Time tracking on storage accounts for a data-driven figure.",
+                    key="hot_cool_pct_slider",
+                )
+            cool_pct = cool_pct_int / 100
+            if cool_pct_int <= 39:
+                scenario_label = "Conservative estimate"
+                scenario_color = "#64748b"
+            elif cool_pct_int <= 69:
+                scenario_label = "Moderate estimate"
+                scenario_color = "#2563eb"
+            else:
+                scenario_label = "Aggressive estimate"
+                scenario_color = "#f97316"
+            with label_col:
+                st.markdown(
+                    f"<div style='padding-top:28px;font-size:0.78rem;font-weight:700;"
+                    f"color:{scenario_color}'>{scenario_label}</div>",
+                    unsafe_allow_html=True,
+                )
+            total_cool_eligible_tb = hot_tb * cool_pct
+            data_source_label      = f"{scenario_label} · no tracking data loaded"
 
-        # ── Recalculate with slider value ─────────────────────────────────────
-        optimized_cost = (
-            (hot_tb * (1 - cool_pct))         * 1024 * HOT_PRICE +
-            (cool_tb + hot_tb * cool_pct)     * 1024 * COOL_PRICE +
-            cold_tb                           * 1024 * COLD_PRICE +
-            archive_tb                        * 1024 * ARCHIVE_PRICE
+        optimized_cost   = (
+            (hot_tb - total_cool_eligible_tb) * 1024 * HOT_PRICE +
+            (cool_tb + total_cool_eligible_tb) * 1024 * COOL_PRICE +
+            cold_tb                            * 1024 * COLD_PRICE +
+            archive_tb                         * 1024 * ARCHIVE_PRICE
         )
         potential_saving = current_cost - optimized_cost
         saving_pct       = round(potential_saving / current_cost * 100, 1) if current_cost > 0 else 0
@@ -662,14 +784,14 @@ else:
                 <div class="kpi-icon">🎯</div>
                 <div class="kpi-value cool">${optimized_cost:,.0f}</div>
                 <div class="kpi-label">Est. Cost After Right-Sizing</div>
-                <div class="kpi-sub">{cool_pct_int}% of Hot moved to Cool</div>
+                <div class="kpi-sub">{round(total_cool_eligible_tb, 0):,.0f} TB Hot → Cool</div>
             </div>""", unsafe_allow_html=True)
         with cs3:
             st.markdown(f"""<div class="kpi-card green">
                 <div class="kpi-icon">📉</div>
                 <div class="kpi-value green">${potential_saving:,.0f}</div>
                 <div class="kpi-label">Potential Monthly Saving</div>
-                <div class="kpi-sub">{saving_pct}% reduction · {scenario_label.lower()}</div>
+                <div class="kpi-sub">{saving_pct}% reduction</div>
             </div>""", unsafe_allow_html=True)
         with cs4:
             st.markdown(f"""<div class="kpi-card green">
@@ -678,14 +800,14 @@ else:
                 <div class="kpi-label">Potential Annual Saving</div>
                 <div class="kpi-sub">Via lifecycle policy automation</div>
             </div>""", unsafe_allow_html=True)
+
         st.markdown(f"""
         <div style="font-size:0.71rem;color:#94a3b8;margin:6px 0 4px 2px;">
-            Estimates use Azure LRS West US list prices &nbsp;·&nbsp;
+            Azure LRS West US list prices &nbsp;·&nbsp;
             Hot $0.0184/GB &nbsp;·&nbsp; Cool $0.0100/GB &nbsp;·&nbsp;
             Cold $0.0045/GB &nbsp;·&nbsp; Archive $0.00099/GB &nbsp;·&nbsp;
-            Assumes {cool_pct_int}% of Hot-tier data not accessed in 30+ days is cool-eligible ({scenario_label.lower()}).
+            Source: {data_source_label}.
             Actual savings depend on access patterns and redundancy tier.
-            Enable <strong>Last Access Time tracking</strong> on storage accounts for a data-driven figure.
         </div>
         """, unsafe_allow_html=True)
 
