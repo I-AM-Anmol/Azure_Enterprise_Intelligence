@@ -47,12 +47,14 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
 .kpi-card.red   { border-top-color:#dc2626; }
 .kpi-card.green { border-top-color:#16a34a; }
 .kpi-card.ora   { border-top-color:#ea580c; }
+.kpi-card.sav   { border-top-color:#7c3aed; }
 .kpi-lbl  { font-size:0.7rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.06em; margin-bottom:5px; }
 .kpi-val  { font-size:2rem; font-weight:700; color:#0f172a; line-height:1.1; }
 .kpi-val.red  { color:#dc2626; }
 .kpi-val.grn  { color:#16a34a; }
 .kpi-val.ora  { color:#ea580c; }
 .kpi-val.blu  { color:#2563eb; }
+.kpi-val.pur  { color:#7c3aed; }
 .kpi-sub  { font-size:0.71rem; color:#64748b; margin-top:3px; }
 
 .mb-wrap { margin:16px 0 6px 0; }
@@ -148,6 +150,11 @@ table.bgt tr:hover td { background:#f8fafc; }
 .badge-warn  { background:#fef9c3; color:#ca8a04; border:1px solid #fde047; }
 .badge-watch { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
 .badge-ok    { background:#dcfce7; color:#16a34a; border:1px solid #86efac; }
+
+/* ideal burn tooltip chip */
+.iburn-ok  { color:#16a34a; font-weight:600; font-size:11px; }
+.iburn-oor { color:#dc2626; font-weight:600; font-size:11px; }
+.iburn-sub { font-size:10px; color:#64748b; margin-top:1px; }
 
 .dash-footer {
     font-size:0.7rem; color:#94a3b8;
@@ -257,9 +264,6 @@ def fetch_budget_data(token):
     return df, elapsed
 
 
-# Pre-aggregated DAX — returns ~3K rows instead of 152K raw rows.
-# Aggregates cost per subscription + serviceFamily + meterCategory + usageDate,
-# avoiding a full table scan over the wire on every page load.
 _SVC_DAX = """
 EVALUATE
 SUMMARIZECOLUMNS(
@@ -274,12 +278,10 @@ SUMMARIZECOLUMNS(
 
 @st.cache_data(ttl=300)
 def fetch_service_data(token):
-    """Fetch pre-aggregated SpendByService — returns empty DataFrame if table not yet available."""
     try:
         df = _pbi_query(token, _SVC_DAX, timeout=180)
         if not df.empty:
             df["cost"]      = pd.to_numeric(df.get("cost", 0), errors="coerce").fillna(0)
-            # Parse and strip timezone so window comparisons work consistently
             df["usageDate"] = pd.to_datetime(df.get("usageDate", pd.NaT), errors="coerce").dt.tz_localize(None)
         return df
     except Exception:
@@ -337,6 +339,12 @@ except Exception:
 day_num = today.day
 day_pct = round(day_num / days_in_month * 100, 0)
 
+# ── Potential Savings KPI ─────────────────────────────────────────────────────
+# For each OVER BUDGET subscription: overspend = actualSpend - budgetAmount.
+# If they had stayed within budget, that overspend would have been saved.
+over_df          = df[df["_displayStatus"] == "OVER BUDGET"].copy()
+potential_savings = (over_df["actualSpend"] - over_df["budgetAmount"]).clip(lower=0).sum()
+
 user_email = st.session_state.get("user_email", "anmol.sharma@milliman.com")
 generated  = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -354,8 +362,8 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── KPI Cards ─────────────────────────────────────────────────────────────────
-k1, k2, k3, k4, k5 = st.columns(5)
+# ── KPI Cards — 6 columns now ─────────────────────────────────────────────────
+k1, k2, k3, k4, k5, k6 = st.columns(6)
 with k1:
     st.markdown(f"""<div class="kpi-card">
         <div class="kpi-lbl">Total Budget (MTD)</div>
@@ -386,6 +394,16 @@ with k5:
         <div class="kpi-lbl">Status Summary</div>
         <div class="kpi-val red">{n_over} <span style="font-size:13px;color:#64748b">over budget</span></div>
         <div class="kpi-sub">{n_watch} watch &nbsp;&middot;&nbsp; {n_ok} ok</div>
+    </div>""", unsafe_allow_html=True)
+with k6:
+    # Potential savings = sum of (actualSpend - budgetAmount) for all OVER BUDGET subs.
+    # This answers: "how much extra did we spend that we didn't need to?"
+    sav_k = potential_savings / 1000
+    sav_fmt = f"${sav_k:.1f}K" if sav_k >= 1 else f"${potential_savings:,.0f}"
+    st.markdown(f"""<div class="kpi-card sav">
+        <div class="kpi-lbl">Potential Savings</div>
+        <div class="kpi-val pur">{sav_fmt}</div>
+        <div class="kpi-sub">if {n_over} over-budget sub{"s" if n_over != 1 else ""} stayed within limit</div>
     </div>""", unsafe_allow_html=True)
 
 # ── Month Progress Bar ────────────────────────────────────────────────────────
@@ -461,7 +479,7 @@ with cnt_col:
     )
 
 
-# ── Build HTML table (unchanged) ──────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 def badge_html(status):
     cls = {"OVER BUDGET": "badge-over", "CRITICAL": "badge-crit",
            "WARNING": "badge-warn", "WATCH": "badge-watch"}.get(status, "badge-ok")
@@ -494,6 +512,33 @@ def fmt_gap(gap, days):
     return f"{g_html} {d_html}"
 
 
+def ideal_burn_html(remaining, days_rem, actual_burn):
+    """
+    Ideal daily burn = remaining budget / days left in month.
+    This is the maximum spend per day to finish exactly at budget.
+    If already over budget (remaining < 0), show a deficit warning instead.
+    """
+    if days_rem is None or math.isnan(days_rem) or days_rem <= 0:
+        return "<span class='na'>—</span>"
+    if remaining is None or math.isnan(remaining):
+        return "<span class='na'>—</span>"
+    if remaining <= 0:
+        return f"<span class='iburn-oor'>$0/d</span><div class='iburn-sub'>deficit — spend must stop</div>"
+    ideal = remaining / days_rem
+    # Compare against actual burn: flag if actual exceeds ideal by >10%
+    if actual_burn and not math.isnan(actual_burn) and actual_burn > ideal * 1.10:
+        delta_pct = round((actual_burn - ideal) / ideal * 100, 0)
+        return (
+            f"<span class='iburn-oor'>${ideal:,.0f}/d</span>"
+            f"<div class='iburn-sub'>actual {int(delta_pct)}% above target</div>"
+        )
+    return (
+        f"<span class='iburn-ok'>${ideal:,.0f}/d</span>"
+        f"<div class='iburn-sub'>on track</div>"
+    )
+
+
+# ── Build HTML table ──────────────────────────────────────────────────────────
 rows_html = []
 for _, r in filtered.iterrows():
     sub       = str(r.get("subscription", "")).replace("MedInsight - ", "")
@@ -506,6 +551,7 @@ for _, r in filtered.iterrows():
     burn      = r.get("dailyBurnRate", 0) or 0
     proj      = r.get("projectedEOM", 0)  or 0
     rem       = r.get("remainingUSD", 0)  or 0
+    days_rem  = r.get("daysRemaining", 0) or 0
     status    = str(r.get("_displayStatus", "OK"))
 
     a1pct  = r.get("alert1Pct")
@@ -566,6 +612,9 @@ for _, r in filtered.iterrows():
     tenant_div = f"<div class='stn'>{tenant}</div>" if tenant else ""
     sub_cell   = f"<div class='sn'>{sub}</div><div class='sf'>{full_sub}</div>{tenant_div}"
 
+    # Ideal burn cell — new column
+    iburn_cell = ideal_burn_html(rem, days_rem, burn)
+
     rc = row_class(status)
     rows_html.append(f"""<tr class='{rc}'>
   <td>{sub_cell}</td>
@@ -575,6 +624,7 @@ for _, r in filtered.iterrows():
   <td>{bar_html}</td>
   <td class='num'><b style='color:{bc}'>{pct}%</b></td>
   <td class='num'>${int(burn)}/d</td>
+  <td class='num'>{iburn_cell}</td>
   <td class='num'>{proj_cell}</td>
   <td>{a1_cell}</td>
   <td>{a2_cell}</td>
@@ -594,6 +644,7 @@ table_html = f"""
   <th>Progress</th>
   <th class="num">% Used</th>
   <th class="num">Daily Burn</th>
+  <th class="num">Ideal Burn/Day</th>
   <th class="num">Projected EOM</th>
   <th>Alert 1</th>
   <th>Alert 2</th>
@@ -611,7 +662,7 @@ st.markdown(table_html, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ── BURN RATE DRIVERS & RECOMMENDATIONS (new section) ─────────────────────────
+# ── BURN RATE DRIVERS & RECOMMENDATIONS ───────────────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 
 st.markdown("---")
@@ -626,35 +677,23 @@ if svc_df.empty:
         "then refresh this page."
     )
 else:
-    # ── Compute trend metrics from daily rows ──────────────────────────────────
-    # Split into two windows relative to today.
-    # curr_window = last 30 days (or all available data if sub has < 30 days of rows)
-    # prev_window = prior 30 days (days 31-60)
     from datetime import timedelta as _td
     today_dt   = pd.Timestamp.now(tz="UTC").normalize().tz_localize(None)
     cutoff_30  = today_dt - _td(days=30)
     cutoff_60  = today_dt - _td(days=60)
 
-    # usageDate already parsed and tz-stripped in fetch_service_data
+    curr_window = svc_df[svc_df["usageDate"] >= cutoff_60].copy()
+    prev_window = svc_df[(svc_df["usageDate"] >= cutoff_60) & (svc_df["usageDate"] < cutoff_30)].copy()
 
-    # Use the full 60-day dataset as curr_window so subscriptions whose spend
-    # dates fall between day 31-60 (e.g. older data, low-frequency billing) are
-    # still included. prev_window uses only days 31-60 for trend comparison.
-    curr_window = svc_df[svc_df["usageDate"] >= cutoff_60].copy()   # all 60 days
-    prev_window = svc_df[(svc_df["usageDate"] >= cutoff_60) & (svc_df["usageDate"] < cutoff_30)].copy()  # days 31-60
-
-    # Per subscription + serviceFamily aggregates
     curr_sf = curr_window.groupby(["subscription", "serviceFamily"])["cost"].sum().reset_index(name="curr30")
     prev_sf = prev_window.groupby(["subscription", "serviceFamily"])["cost"].sum().reset_index(name="prev30")
     sf_trend = pd.merge(curr_sf, prev_sf, on=["subscription", "serviceFamily"], how="left").fillna(0)
 
-    # % change 30d vs prev 30d
     sf_trend["chg30"] = sf_trend.apply(
         lambda r: round((r["curr30"] - r["prev30"]) / r["prev30"] * 100, 1) if r["prev30"] > 0 else None,
         axis=1
     )
 
-    # 7-day rolling average vs 60-day average (acceleration signal)
     cutoff_7 = today_dt - _td(days=7)
     last7  = svc_df[svc_df["usageDate"] >= cutoff_7].groupby(["subscription", "serviceFamily"])["cost"].mean().reset_index(name="avg7d")
     last30 = curr_window.groupby(["subscription", "serviceFamily"])["cost"].mean().reset_index(name="avg30d")
@@ -664,11 +703,9 @@ else:
         axis=1
     )
 
-    # Merge everything together
     sf_full = sf_trend.merge(accel[["subscription", "serviceFamily", "avg7d", "avg30d", "accelPct"]],
                               on=["subscription", "serviceFamily"], how="left")
 
-    # Per subscription + serviceFamily + meterCategory for drill-down
     curr_mc = curr_window.groupby(["subscription", "serviceFamily", "meterCategory"])["cost"].sum().reset_index(name="curr30")
     prev_mc = prev_window.groupby(["subscription", "serviceFamily", "meterCategory"])["cost"].sum().reset_index(name="prev30")
     mc_trend = pd.merge(curr_mc, prev_mc, on=["subscription", "serviceFamily", "meterCategory"], how="left").fillna(0)
@@ -677,7 +714,6 @@ else:
         axis=1
     )
 
-    # Service family colour palette (deterministic)
     SF_COLORS = [
         "#2563eb", "#ea580c", "#16a34a", "#9333ea", "#0891b2",
         "#dc2626", "#ca8a04", "#0d9488", "#db2777", "#64748b",
@@ -702,22 +738,13 @@ else:
         arrow = "▲" if pct > 0 else "▼"
         return f"<span class='accel-warn'>7d avg {arrow}{abs(pct):.0f}% vs 60d</span>"
 
-    # ── Section tabs: Drivers | Recommendations ────────────────────────────────
     tab_drivers, tab_recs = st.tabs(["📊 Burn Rate Drivers", "💡 Recommendations"])
 
-    # ── TAB 1: Burn Rate Drivers ───────────────────────────────────────────────
     with tab_drivers:
-        # Union of BudgetData + SpendByService subscriptions, sorted.
-        # BudgetData only contains subs with a budget configured.
-        # SpendByService contains subs with actual spend in the last 60 days.
-        # A sub may appear in SpendByService but not BudgetData (no budget set up),
-        # so we combine both to ensure nothing is hidden from the selector.
         budget_subs_set = set(df["subscription"].tolist())
         svc_subs_set    = set(sf_full["subscription"].unique())
         all_budget_subs = sorted(budget_subs_set | svc_subs_set)
 
-        # Default: top 5 by actual spend that have service breakdown data.
-        # Keeping default small so the view isn't overwhelming — user can search and add more.
         top_spenders = df[df["subscription"].isin(svc_subs_set)].nlargest(5, "actualSpend")["subscription"].tolist()
         default_sel  = top_spenders
 
@@ -729,7 +756,6 @@ else:
             key="driver_sub_sel"
         )
 
-        # Drill-down toggle
         show_meter = st.toggle("Show MeterCategory drill-down", value=False, key="show_meter_toggle")
 
         if not selected_subs:
@@ -737,12 +763,12 @@ else:
         else:
             for sub_name in selected_subs:
                 sub_row = df[df["subscription"] == sub_name]
-                # Sub may have spend data but no budget configured — still show the card
                 if sub_row.empty:
                     budget_amt  = 0
                     actual_amt  = 0
                     burn_rate   = 0
                     remaining   = 0
+                    days_rem_s  = 0
                     status      = "NO BUDGET"
                 else:
                     r           = sub_row.iloc[0]
@@ -750,23 +776,31 @@ else:
                     actual_amt  = r.get("actualSpend",  0) or 0
                     burn_rate   = r.get("dailyBurnRate", 0) or 0
                     remaining   = r.get("remainingUSD",  0) or 0
+                    days_rem_s  = r.get("daysRemaining", 0) or 0
                     status      = str(r.get("_displayStatus", "OK"))
                 sub_display = sub_name.replace("MedInsight - ", "")
 
+                # Ideal burn for the driver card header
+                if days_rem_s > 0 and remaining > 0:
+                    ideal_rate = remaining / days_rem_s
+                    ideal_note = f"Ideal burn: ${ideal_rate:,.0f}/day to stay on budget"
+                elif remaining <= 0:
+                    ideal_note = "Ideal burn: $0/day — budget exhausted"
+                else:
+                    ideal_note = ""
+
                 sub_sf = sf_full[sf_full["subscription"] == sub_name].sort_values("curr30", ascending=False)
                 if sub_sf.empty:
-                    # Sub exists in BudgetData but has no spend in SpendByService
                     st.markdown(f"""
 <div class="driver-card">
   <div class="driver-sub-name">{sub_display} &nbsp;<span style="font-size:10px;font-weight:400;color:#64748b">{status}</span></div>
-  <div class="driver-sub-meta">Budget: ${budget_amt:,.0f} &nbsp;·&nbsp; Actual MTD: ${actual_amt:,.0f} &nbsp;·&nbsp; Burn: ${burn_rate:,.0f}/day</div>
+  <div class="driver-sub-meta">Budget: ${budget_amt:,.0f} &nbsp;·&nbsp; Actual MTD: ${actual_amt:,.0f} &nbsp;·&nbsp; Burn: ${burn_rate:,.0f}/day{(" &nbsp;·&nbsp; " + ideal_note) if ideal_note else ""}</div>
   <div style="font-size:0.75rem;color:#94a3b8;margin-top:6px;">No spend recorded in the last 60 days — no service breakdown available.</div>
 </div>""", unsafe_allow_html=True)
                     continue
 
                 total_curr30 = sub_sf["curr30"].sum()
 
-                # Build ServiceFamily breakdown bars + trend pills
                 sf_bars_html = ""
                 for i, (_, sfr) in enumerate(sub_sf.iterrows()):
                     share    = round(sfr["curr30"] / total_curr30 * 100, 1) if total_curr30 > 0 else 0
@@ -784,7 +818,6 @@ else:
   </div>
 </div>"""
 
-                # MeterCategory drill-down (if toggled on)
                 mc_html = ""
                 if show_meter:
                     sub_mc = mc_trend[mc_trend["subscription"] == sub_name].sort_values("curr30", ascending=False)
@@ -807,6 +840,7 @@ else:
 </div>"""
                         mc_html += "</div>"
 
+                ideal_meta = f" &nbsp;·&nbsp; <span style='color:#7c3aed;font-weight:600'>{ideal_note}</span>" if ideal_note else ""
                 st.markdown(f"""
 <div class="driver-card">
   <div class="driver-sub-name">{sub_display} &nbsp;<span style="font-size:10px;font-weight:400;color:#64748b">{status}</span></div>
@@ -814,7 +848,7 @@ else:
     Budget: ${budget_amt:,.0f} &nbsp;·&nbsp;
     Actual MTD: ${actual_amt:,.0f} &nbsp;·&nbsp;
     Burn: ${burn_rate:,.0f}/day &nbsp;·&nbsp;
-    Remaining: ${remaining:,.0f}
+    Remaining: ${remaining:,.0f}{ideal_meta}
   </div>
   <div class="driver-card-title">ServiceFamily breakdown — last 30 days &nbsp;
     <span style="font-size:10px;font-weight:400;color:#94a3b8">(trend = vs prior 30 days)</span>
@@ -824,11 +858,10 @@ else:
 </div>
 """, unsafe_allow_html=True)
 
-    # ── TAB 2: Recommendations ─────────────────────────────────────────────────
     with tab_recs:
         st.caption("Prioritised, logic-driven recommendations based on burn rate, service family trends, and budget status.")
 
-        rec_items = []   # list of (sort_order, html)
+        rec_items = []
 
         for _, r in df.iterrows():
             sub_name    = str(r.get("subscription", ""))
@@ -842,11 +875,9 @@ else:
             proj_eom    = float(r.get("projectedEOM",  0) or 0)
             owners_str  = str(r.get("alert1Recipients", "") or "")
 
-            # Safe burn = amount we can spend per day to stay within budget
             safe_burn = (remaining / days_rem) if days_rem > 0 and remaining > 0 else 0
             overrun   = max(proj_eom - budget_amt, 0)
 
-            # Top contributing service family for this sub (current 30d)
             sub_sf       = sf_full[sf_full["subscription"] == sub_name].sort_values("curr30", ascending=False)
             top_sf_name  = sub_sf.iloc[0]["serviceFamily"] if not sub_sf.empty else None
             top_sf_curr  = sub_sf.iloc[0]["curr30"]        if not sub_sf.empty else 0
@@ -854,14 +885,12 @@ else:
             top_sf_accel = sub_sf.iloc[0].get("accelPct")  if not sub_sf.empty else None
             top_sf_share = round(top_sf_curr / sub_sf["curr30"].sum() * 100, 0) if not sub_sf.empty and sub_sf["curr30"].sum() > 0 else 0
 
-            # Build driver context string
             driver_ctx = ""
             if top_sf_name:
                 chg_str   = f"{top_sf_chg:+.1f}% vs prior 30d" if top_sf_chg is not None else "no prior data"
                 accel_str = (f", 7d avg is {top_sf_accel:+.0f}% vs 30d avg (accelerating)" if top_sf_accel and abs(top_sf_accel) > 10 else "")
                 driver_ctx = f"Top driver: <b>{top_sf_name}</b> ({int(top_sf_share)}% of MTD spend, {chg_str}{accel_str})."
 
-            # ── Priority: IMMEDIATE — already over budget ──────────────────────
             if status == "OVER BUDGET":
                 deficit   = actual_amt - budget_amt
                 body      = (
@@ -873,7 +902,6 @@ else:
                     body += f" Notify: {owners_str}."
                 rec_items.append((0, status, sub_display, "IMMEDIATE", "rec-immediate", "🔴 Budget Exceeded", body, driver_ctx))
 
-            # ── Priority: URGENT — critical threshold crossed ──────────────────
             elif status == "CRITICAL":
                 body = (
                     f"At <b>{r.get('pctUsed', 0):.1f}%</b> of budget with <b>{int(days_rem)} days</b> left. "
@@ -882,21 +910,18 @@ else:
                 )
                 rec_items.append((1, status, sub_display, "URGENT", "rec-urgent", "🟠 Critical Threshold", body, driver_ctx))
 
-            # ── Priority: HIGH — warning threshold or accelerating service ─────
             elif status in ("WARNING", "WATCH"):
                 body = (
                     f"Projected to exceed budget by <b>${overrun:,.0f}</b> at current pace. "
                     f"Reduce daily burn from <b>${burn_rate:,.0f}</b> to <b>${safe_burn:,.0f}</b> "
                     f"to finish the month within budget."
                 )
-                # Escalate to HIGH if a service family is accelerating strongly
                 accel_flag = top_sf_accel is not None and abs(top_sf_accel) > 20
                 priority   = "HIGH" if accel_flag else "MEDIUM"
                 css_class  = "rec-high" if accel_flag else "rec-medium"
                 label      = "🟡 Warning / Watch" if not accel_flag else "🟡 Warning — Accelerating Spend"
                 rec_items.append((2 if accel_flag else 3, status, sub_display, priority, css_class, label, body, driver_ctx))
 
-            # ── Priority: REVIEW — ok but top-5 org burn contributor ──────────
             else:
                 top5_burn = df.nlargest(5, "dailyBurnRate")["subscription"].tolist()
                 if sub_name in top5_burn and total_burn > 0:
