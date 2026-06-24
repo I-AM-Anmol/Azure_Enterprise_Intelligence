@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 # CloudLens SVG logo — embedded as base64 for deployment portability
-_logo_path = Path(__file__).parent / "assets" / "cloudlens_logo.svg"
+_logo_path = Path(__file__).parent / "assets" / "cloudlens_logo_C.svg"
 _logo_mime = "image/svg+xml"
 _logo_b64  = base64.b64encode(_logo_path.read_bytes()).decode() if _logo_path.exists() else None
 
@@ -113,9 +113,9 @@ if _logo_b64:
         )
 
 pg = st.navigation([
-    st.Page("pages/0_Home.py",              title="Home",              icon="🏠", default=True),
-    st.Page("pages/1_Storage_Lifecycle.py", title="Storage Lifecycle", icon="🗄️"),
-    st.Page("pages/2_Budget_Analysis.py",   title="Budget & Alert Analysis",   icon="💰"),
+    st.Page("pages/0_Home.py",              title="Home",                    icon=":material/dashboard:",  default=True),
+    st.Page("pages/1_Storage_Lifecycle.py", title="Storage Lifecycle",       icon=":material/layers:"),
+    st.Page("pages/2_Budget_Analysis.py",   title="Budget & Alert Analysis", icon=":material/bar_chart:"),
 ])
 
 pg.run()
