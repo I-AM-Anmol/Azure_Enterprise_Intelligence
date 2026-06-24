@@ -1,5 +1,4 @@
 import streamlit as st
-import base64
 from pathlib import Path
 
 st.set_page_config(
@@ -9,8 +8,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# st.logo() is the only API that works with st.navigation() sidebar
 _logo_path = Path(__file__).parent / "assets" / "cloudlens_logo_C.svg"
-_logo_b64  = base64.b64encode(_logo_path.read_bytes()).decode() if _logo_path.exists() else None
+if _logo_path.exists():
+    st.logo(str(_logo_path), size="large")
 
 # Global styles — applied on every page
 st.markdown("""
@@ -101,15 +102,6 @@ div[data-testid="stSidebarUserContent"] { order: 1 !important; }
 """, unsafe_allow_html=True)
 
 
-if _logo_b64:
-    with st.sidebar:
-        st.markdown(
-            f'<div class="sb-logo-card">'
-            f'<img src="data:image/svg+xml;base64,{_logo_b64}" alt="CloudLens">'
-            f'</div>'
-            f'<hr class="sb-divider">',
-            unsafe_allow_html=True,
-        )
 
 pg = st.navigation([
     st.Page("pages/0_Home.py",              title="Home",                    icon=":material/dashboard:",  default=True),
