@@ -1,4 +1,5 @@
 import streamlit as st
+import base64
 from pathlib import Path
 
 st.set_page_config(
@@ -8,10 +9,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# st.logo() is the only API that works with st.navigation() sidebar
-_logo_path = Path(__file__).parent / "assets" / "cloudlens_logo_C.svg"
-if _logo_path.exists():
-    st.logo(str(_logo_path), size="large")
+# Embed original logo (white text, transparent bg) as base64
+_logo_path = Path(__file__).parent / "assets" / "cloudlens_logo.svg"
+_logo_b64  = base64.b64encode(_logo_path.read_bytes()).decode() if _logo_path.exists() else None
 
 # Global styles — applied on every page
 st.markdown("""
@@ -31,25 +31,23 @@ section[data-testid="stSidebar"] {
 /* Push main content away from sidebar */
 .main .block-container { padding-left: 1rem !important; }
 
-/* ── Logo area ───────────────────────────────────────────────── */
+/* ── Logo block ─────────────────────────────────────────────── */
 .sb-logo-card {
-    padding: 16px 12px 10px 12px;
-    background-color: #1a2744;
+    padding: 20px 14px 12px 14px;
 }
 .sb-logo-card img {
     width: 100%;
-    max-width: 210px;
+    max-width: 200px;
     height: auto;
     display: block;
-    border-radius: 6px;
 }
 .sb-divider {
     border: none;
     border-top: 1px solid #2a3f6f;
-    margin: 0 12px 4px 12px;
+    margin: 8px 12px 4px 12px;
 }
 
-/* Reorder: logo (UserContent) above nav links */
+/* Reorder: UserContent (logo) sits above stSidebarNav (nav links) */
 div[data-testid="stSidebarContent"] {
     display: flex !important;
     flex-direction: column !important;
@@ -81,13 +79,12 @@ div[data-testid="stSidebarUserContent"] { order: 1 !important; }
     display: block !important;
     color: inherit !important;
 }
-/* Icon color inherits from parent link */
 [data-testid="stSidebarNavLink"] span,
 [data-testid="stSidebarNavLink"] svg {
     color: inherit !important;
 }
 
-/* ── Sidebar footer label ───────────────────────────────────── */
+/* ── Sidebar footer ─────────────────────────────────────────── */
 .sb-footer {
     padding: 14px 16px 8px 16px;
     font-size: 0.68rem;
@@ -101,10 +98,19 @@ div[data-testid="stSidebarUserContent"] { order: 1 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-
+# Inject logo into sidebar BEFORE pg.run() so it appears at top
+if _logo_b64:
+    with st.sidebar:
+        st.markdown(
+            f'<div class="sb-logo-card">'
+            f'<img src="data:image/svg+xml;base64,{_logo_b64}" alt="CloudLens">'
+            f'</div>'
+            f'<hr class="sb-divider">',
+            unsafe_allow_html=True,
+        )
 
 pg = st.navigation([
-    st.Page("pages/0_Home.py",              title="Home",                    icon=":material/dashboard:",  default=True),
+    st.Page("pages/0_Home.py",              title="Home",                    icon=":material/dashboard:", default=True),
     st.Page("pages/1_Storage_Lifecycle.py", title="Storage Lifecycle",       icon=":material/layers:"),
     st.Page("pages/2_Budget_Analysis.py",   title="Budget & Alert Analysis", icon=":material/bar_chart:"),
 ])
