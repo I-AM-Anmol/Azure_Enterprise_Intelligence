@@ -28,15 +28,39 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
 [data-testid="collapsedControl"] { display:none !important; }
 
 .top-banner {
-    background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);
-    border-radius:12px; padding:22px 28px 18px 28px; margin-bottom:20px;
-    border:1px solid #bfdbfe;
+    background: linear-gradient(100deg, #0f2554 0%, #1a3a6e 60%, #1e4d8c 100%);
+    border-radius: 12px; padding: 22px 32px 18px 32px; margin-bottom: 20px;
+    border: none;
+    box-shadow: 0 4px 18px rgba(15,37,84,0.18);
+    position: relative; overflow: hidden;
 }
-.top-banner .dash-title { font-size:1.55rem; font-weight:700; color:#1e3a8a; line-height:1.3; }
-.top-banner .dash-title span { color:#2563eb; }
-.top-banner .dash-meta { display:flex; gap:18px; flex-wrap:wrap; margin-top:6px; }
-.top-banner .dash-meta .m { font-size:0.73rem; color:#64748b; }
-.top-banner .dash-meta .m::before { content:"● "; color:#2563eb; }
+.top-banner::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
+    background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+    border-radius: 12px 0 0 12px;
+}
+.top-banner::after {
+    content: "";
+    position: absolute; right: -60px; top: -60px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(96,165,250,0.07) 0%, transparent 70%);
+    pointer-events: none;
+}
+.top-banner .dash-title {
+    font-size: 1.55rem; font-weight: 700; color: #ffffff;
+    line-height: 1.3; letter-spacing: -0.02em;
+}
+.top-banner .dash-title span { color: #60a5fa; }
+.top-banner .dash-meta {
+    display: flex; gap: 0; flex-wrap: wrap; margin-top: 8px; align-items: center;
+}
+.top-banner .dash-meta .m {
+    font-size: 0.73rem; color: rgba(255,255,255,0.55);
+    padding-right: 14px; margin-right: 14px;
+    border-right: 1px solid rgba(255,255,255,0.15);
+}
+.top-banner .dash-meta .m:last-child { border-right: none; padding-right: 0; margin-right: 0; }
 
 .kpi-card {
     background:#ffffff; border-radius:10px;
