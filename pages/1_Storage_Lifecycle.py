@@ -45,10 +45,10 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
 [data-testid="collapsedControl"] { display:none !important; }
 
 .top-banner {
-    background: linear-gradient(100deg, #0f2554 0%, #1a3a6e 60%, #1e4d8c 100%);
+    background: linear-gradient(100deg, #1a3a6e 0%, #1e4d8c 60%, #2255a4 100%);
     border-radius: 12px; padding: 22px 32px 18px 32px; margin-bottom: 20px;
     border: none;
-    box-shadow: 0 4px 18px rgba(15,37,84,0.18);
+    box-shadow: 0 4px 18px rgba(26,58,110,0.20);
     position: relative; overflow: hidden;
 }
 .top-banner::before {
