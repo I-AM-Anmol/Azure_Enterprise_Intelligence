@@ -999,90 +999,97 @@ with st.container(border=True):
     if not sub_list:
         st.info("No subscriptions match the current filters.")
     else:
-        h1, h2, h3, h4, h5, h6 = st.columns([5, 3, 2, 2, 2, 2])
-        h1.markdown("**Subscription / Storage Account**")
-        h2.markdown("**Policy Name**")
-        h3.markdown("**Total**")
-        h4.markdown("**With Policy**")
-        h5.markdown("**Without Policy**")
-        h6.markdown("**Coverage %**")
-        st.markdown("<hr style='margin:4px 0;'>", unsafe_allow_html=True)
-
-        # Pre-build per-account tier lookup for expanders
-        acct_tier_lookup = {}
-        if blob_loaded and not blob_df.empty:
-            for _, row in blob_df.iterrows():
-                acct_tier_lookup[row["StorageAccount"]] = {
-                    "Hot_TB":     row["Hot_TB"],
-                    "Cool_TB":    row["Cool_TB"],
-                    "Cold_TB":    row["Cold_TB"],
-                    "Archive_TB": row["Archive_TB"],
-                    "Total_TB":   row["Total_TB"],
-                }
-
+        # Build summary dataframe for table display
+        cov_rows = []
         for sub_name in sub_list:
-            exp_key = f"_xp_{sub_name}"
-            if exp_key not in st.session_state:
-                st.session_state[exp_key] = False
-
             if sub_groups and sub_name in sub_groups.groups:
                 grp       = sub_groups.get_group(sub_name)
                 t_total   = len(grp)
                 t_with    = int(grp["HasPolicy"].sum())
                 t_without = t_total - t_with
                 t_cov     = round(t_with / t_total * 100, 1) if t_total else 0
-                cov_icon  = "🟢" if t_cov >= 75 else ("🟡" if t_cov >= 50 else "🔴")
-                cov_color = "#16a34a" if t_cov >= 75 else ("#ea580c" if t_cov >= 50 else "#dc2626")
-
-                r1, r2, r3, r4, r5, r6 = st.columns([5, 3, 2, 2, 2, 2])
-                with r1:
-                    arrow = "▼" if st.session_state[exp_key] else "▶"
-                    if st.button(f"{arrow} {cov_icon}  {sub_name}", key=f"_btn_{sub_name}", use_container_width=True):
-                        st.session_state[exp_key] = not st.session_state[exp_key]
-                r3.markdown(f"<div style='padding-top:6px;font-weight:700;color:#0f172a'>{t_total}</div>", unsafe_allow_html=True)
-                r4.markdown(f"<div style='padding-top:6px;font-weight:700;color:#16a34a'>{t_with}</div>", unsafe_allow_html=True)
-                r5.markdown(f"<div style='padding-top:6px;font-weight:700;color:#dc2626'>{t_without}</div>", unsafe_allow_html=True)
-                r6.markdown(f"<div style='padding-top:6px;font-weight:700;color:{cov_color}'>{t_cov}%</div>", unsafe_allow_html=True)
-
-                if st.session_state[exp_key]:
-                    with st.container():
-                        acct_rows = []
-                        for _, row in grp.iterrows():
-                            acct_nm     = row.get(acct_name_col, "—")
-                            policy_disp = row.get(policy_col, "") if policy_col else ""
-                            policy_disp = policy_disp if str(policy_disp).strip() not in ("", "nan", "None") \
-                                          else ("Implemented" if row["HasPolicy"] else "Not Implemented")
-                            status      = "✅ Implemented" if row["HasPolicy"] else "❌ Not Implemented"
-                            acct_entry  = {
-                                "Storage Account": acct_nm,
-                                "Policy":          policy_disp,
-                                "Status":          status,
-                            }
-                            if acct_nm in acct_tier_lookup:
-                                t = acct_tier_lookup[acct_nm]
-                                acct_entry["Hot (TB)"]     = t["Hot_TB"]
-                                acct_entry["Cool (TB)"]    = t["Cool_TB"]
-                                acct_entry["Cold (TB)"]    = t["Cold_TB"]
-                                acct_entry["Archive (TB)"] = t["Archive_TB"]
-                                acct_entry["Total (TB)"]   = t["Total_TB"]
-                            acct_rows.append(acct_entry)
-
-                        if acct_rows:
-                            acct_tbl = pd.DataFrame(acct_rows)
-                            col_cfg  = {}
-                            for tc in ["Hot (TB)", "Cool (TB)", "Cold (TB)", "Archive (TB)", "Total (TB)"]:
-                                if tc in acct_tbl.columns:
-                                    col_cfg[tc] = st.column_config.NumberColumn(format="%d TB")
-                            st.dataframe(acct_tbl, use_container_width=True, hide_index=True, column_config=col_cfg)
             else:
                 sub_row  = subs_df[subs_df[sub_name_col] == sub_name] if not subs_df.empty else pd.DataFrame()
                 t_cov    = float(sub_row["CoveragePct"].values[0]) if not sub_row.empty else 0
-                cov_icon = "🟢" if t_cov >= 75 else ("🟡" if t_cov >= 50 else "🔴")
-                r1, _, _, _, _, r6 = st.columns([5, 3, 2, 2, 2, 2])
-                r1.markdown(f"<div style='padding-top:6px;color:#64748b'>&nbsp;&nbsp;{cov_icon} {sub_name}</div>", unsafe_allow_html=True)
-                r6.markdown(f"<div style='padding-top:6px;color:#64748b'>{t_cov}%</div>", unsafe_allow_html=True)
+                t_total, t_with, t_without = 0, 0, 0
+            cov_rows.append({
+                "Subscription":   sub_name,
+                "Total":          t_total,
+                "With Policy":    t_with,
+                "Without Policy": t_without,
+                "Coverage %":     t_cov,
+            })
 
-            st.markdown("<hr style='margin:2px 0;opacity:0.4;border-color:#e2e8f0;'>", unsafe_allow_html=True)
+        summary_df = pd.DataFrame(cov_rows)
+
+        st.caption("Click a row to drill into its storage accounts")
+        event = st.dataframe(
+            summary_df,
+            use_container_width=True,
+            hide_index=True,
+            on_select="rerun",
+            selection_mode="single-row",
+            column_config={
+                "Subscription":   st.column_config.TextColumn("Subscription / Storage Account", width="large"),
+                "Total":          st.column_config.NumberColumn("Total", format="%d"),
+                "With Policy":    st.column_config.NumberColumn("With Policy", format="%d"),
+                "Without Policy": st.column_config.NumberColumn("Without Policy", format="%d"),
+                "Coverage %":     st.column_config.ProgressColumn(
+                    "Coverage %", min_value=0, max_value=100, format="%.1f%%"
+                ),
+            },
+        )
+
+        # Detail drill-down for selected row
+        selected_rows = event.selection.rows
+        if selected_rows:
+            sel_sub = summary_df.iloc[selected_rows[0]]["Subscription"]
+
+            # Build per-account tier lookup
+            acct_tier_lookup = {}
+            if blob_loaded and not blob_df.empty:
+                for _, brow in blob_df.iterrows():
+                    acct_tier_lookup[brow["StorageAccount"]] = {
+                        "Hot_TB":     brow["Hot_TB"],
+                        "Cool_TB":    brow["Cool_TB"],
+                        "Cold_TB":    brow["Cold_TB"],
+                        "Archive_TB": brow["Archive_TB"],
+                        "Total_TB":   brow["Total_TB"],
+                    }
+
+            if sub_groups and sel_sub in sub_groups.groups:
+                grp = sub_groups.get_group(sel_sub)
+                st.markdown(
+                    f'<div class="section-label" style="margin-top:16px">&#9662; {sel_sub} — Storage Accounts</div>',
+                    unsafe_allow_html=True,
+                )
+                acct_rows = []
+                for _, row in grp.iterrows():
+                    acct_nm     = row.get(acct_name_col, "—")
+                    policy_disp = row.get(policy_col, "") if policy_col else ""
+                    policy_disp = policy_disp if str(policy_disp).strip() not in ("", "nan", "None") \
+                                  else ("Implemented" if row["HasPolicy"] else "Not Implemented")
+                    acct_entry  = {
+                        "Storage Account": acct_nm,
+                        "Policy":          policy_disp,
+                        "Status":          "✅ Implemented" if row["HasPolicy"] else "❌ Not Implemented",
+                    }
+                    if acct_nm in acct_tier_lookup:
+                        t = acct_tier_lookup[acct_nm]
+                        acct_entry["Hot (TB)"]     = t["Hot_TB"]
+                        acct_entry["Cool (TB)"]    = t["Cool_TB"]
+                        acct_entry["Cold (TB)"]    = t["Cold_TB"]
+                        acct_entry["Archive (TB)"] = t["Archive_TB"]
+                        acct_entry["Total (TB)"]   = t["Total_TB"]
+                    acct_rows.append(acct_entry)
+
+                if acct_rows:
+                    acct_tbl = pd.DataFrame(acct_rows)
+                    col_cfg  = {}
+                    for tc in ["Hot (TB)", "Cool (TB)", "Cold (TB)", "Archive (TB)", "Total (TB)"]:
+                        if tc in acct_tbl.columns:
+                            col_cfg[tc] = st.column_config.NumberColumn(format="%.0f TB")
+                    st.dataframe(acct_tbl, use_container_width=True, hide_index=True, column_config=col_cfg)
 
 
 # ── Footer ────────────────────────────────────────────────────────────────────
