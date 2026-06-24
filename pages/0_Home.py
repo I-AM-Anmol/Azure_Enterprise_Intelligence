@@ -23,7 +23,8 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 .dash-card.green { border-top-color: #16a34a; }
-.dash-card-icon { font-size: 2.2rem; margin-bottom: 14px; }
+.dash-card-icon { margin-bottom: 14px; }
+.dash-card-icon svg { display: block; }
 .dash-card-title { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: 10px; }
 .dash-card-desc { font-size: 0.82rem; color: #64748b; line-height: 1.65; margin-bottom: 16px; }
 
@@ -55,7 +56,23 @@ c1, c2 = st.columns(2, gap="large")
 with c1:
     st.markdown("""
 <div class="dash-card">
-  <div class="dash-card-icon">🗄️</div>
+  <div class="dash-card-icon">
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="44" height="44" rx="10" fill="#eff6ff"/>
+      <!-- Database cylinder top -->
+      <ellipse cx="22" cy="14" rx="10" ry="3.5" fill="#2563eb" opacity="0.85"/>
+      <!-- Database body left/right sides -->
+      <rect x="12" y="14" width="20" height="8" fill="#2563eb" opacity="0.7"/>
+      <!-- Database cylinder mid -->
+      <ellipse cx="22" cy="22" rx="10" ry="3.5" fill="#2563eb" opacity="0.85"/>
+      <!-- Database body bottom -->
+      <rect x="12" y="22" width="20" height="8" fill="#2563eb" opacity="0.55"/>
+      <!-- Database cylinder bottom -->
+      <ellipse cx="22" cy="30" rx="10" ry="3.5" fill="#2563eb"/>
+      <!-- Shine on top -->
+      <ellipse cx="18" cy="13" rx="3" ry="1.2" fill="white" opacity="0.35"/>
+    </svg>
+  </div>
   <div class="dash-card-title">Storage Lifecycle Policy Coverage</div>
   <div class="dash-card-desc">
     Monitor Azure Blob Storage lifecycle policy adoption across all subscriptions.
@@ -69,7 +86,19 @@ with c1:
 with c2:
     st.markdown("""
 <div class="dash-card green">
-  <div class="dash-card-icon">💰</div>
+  <div class="dash-card-icon">
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="44" height="44" rx="10" fill="#f0fdf4"/>
+      <!-- Bar chart bars -->
+      <rect x="9"  y="30" width="5" height="8"  rx="1.5" fill="#16a34a" opacity="0.5"/>
+      <rect x="17" y="23" width="5" height="15" rx="1.5" fill="#16a34a" opacity="0.7"/>
+      <rect x="25" y="16" width="5" height="22" rx="1.5" fill="#16a34a" opacity="0.85"/>
+      <!-- Trend arrow line -->
+      <polyline points="9,28 17,20 25,14 35,10" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <!-- Arrow head -->
+      <polyline points="30,9 35,10 34,15" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+  </div>
   <div class="dash-card-title">Azure Budget &amp; Alert Analysis</div>
   <div class="dash-card-desc">
     Track Azure spend against monthly budgets across all subscriptions.
