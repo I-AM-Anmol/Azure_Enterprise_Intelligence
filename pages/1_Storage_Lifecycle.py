@@ -729,7 +729,7 @@ else:
             archive_tb * 1024 * ARCHIVE_PRICE
         )
 
-        st.markdown('<div class="section-label">Cost Opportunity — Tier Right-Sizing</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label">Cost Opportunity — Storage Tiers</div>', unsafe_allow_html=True)
 
         # Determine whether real data is available
         has_real_data = not lat_df.empty and lat_enabled > 0
