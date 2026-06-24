@@ -28,10 +28,10 @@ ARM_AUTHORITY = f"https://login.microsoftonline.com/{ARM_TENANT_ID}"
 ARM_SCOPES    = ["https://management.azure.com/.default"]
 
 TIER_COLORS = {
-    "Hot":     "#f97316",
-    "Cool":    "#3b82f6",
-    "Cold":    "#7c3aed",
-    "Archive": "#475569",
+    "Hot":     "#f59e0b",
+    "Cool":    "#2563eb",
+    "Cold":    "#6366f1",
+    "Archive": "#94a3b8",
 }
 
 st_autorefresh(interval=300000)
@@ -87,18 +87,18 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
 }
 .kpi-card.green   { border-top-color:#16a34a; }
 .kpi-card.red     { border-top-color:#dc2626; }
-.kpi-card.hot     { border-top-color:#f97316; }
-.kpi-card.cool    { border-top-color:#3b82f6; }
-.kpi-card.cold    { border-top-color:#7c3aed; }
-.kpi-card.archive { border-top-color:#475569; }
+.kpi-card.hot     { border-top-color:#f59e0b; }
+.kpi-card.cool    { border-top-color:#2563eb; }
+.kpi-card.cold    { border-top-color:#6366f1; }
+.kpi-card.archive { border-top-color:#94a3b8; }
 .kpi-icon  { font-size:1.4rem; margin-bottom:4px; }
 .kpi-value { font-size:2.2rem; font-weight:700; color:#0f172a; line-height:1.1; }
 .kpi-value.green   { color:#16a34a; }
 .kpi-value.red     { color:#dc2626; }
-.kpi-value.hot     { color:#f97316; }
-.kpi-value.cool    { color:#3b82f6; }
-.kpi-value.cold    { color:#7c3aed; }
-.kpi-value.archive { color:#475569; }
+.kpi-value.hot     { color:#f59e0b; }
+.kpi-value.cool    { color:#2563eb; }
+.kpi-value.cold    { color:#6366f1; }
+.kpi-value.archive { color:#94a3b8; }
 .kpi-label { font-size:0.75rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.06em; }
 .kpi-sub   { font-size:0.71rem; color:#94a3b8; margin-top:2px; }
 
@@ -113,10 +113,10 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
     font-size:0.7rem; font-weight:700; letter-spacing:.04em;
     margin-right:4px; color:#fff;
 }
-.tier-badge.hot     { background:#f97316; }
-.tier-badge.cool    { background:#3b82f6; }
-.tier-badge.cold    { background:#7c3aed; }
-.tier-badge.archive { background:#475569; }
+.tier-badge.hot     { background:#f59e0b; }
+.tier-badge.cool    { background:#2563eb; }
+.tier-badge.cold    { background:#6366f1; }
+.tier-badge.archive { background:#94a3b8; }
 
 .blob-scan-box {
     background:#f8fafc; border:1.5px dashed #cbd5e1;
