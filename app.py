@@ -1,5 +1,4 @@
 import streamlit as st
-import base64
 from pathlib import Path
 
 st.set_page_config(
@@ -9,10 +8,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# CloudLens SVG logo — embedded as base64 for deployment portability
+# CloudLens SVG logo
 _logo_path = Path(__file__).parent / "assets" / "cloudlens_logo_C.svg"
-_logo_mime = "image/svg+xml"
-_logo_b64  = base64.b64encode(_logo_path.read_bytes()).decode() if _logo_path.exists() else None
+
+# st.logo() is the reliable way to pin a logo above st.navigation() links
+if _logo_path.exists():
+    st.logo(str(_logo_path), size="large")
 
 # Global styles — applied on every page
 st.markdown("""
@@ -32,30 +33,6 @@ section[data-testid="stSidebar"] {
 /* Push main content away from sidebar */
 .main .block-container { padding-left: 1rem !important; }
 
-/* ── Reorder sidebar: logo block above nav links ────────────── */
-div[data-testid="stSidebarContent"] {
-    display: flex !important;
-    flex-direction: column !important;
-}
-div[data-testid="stSidebarNav"]         { order: 2 !important; }
-div[data-testid="stSidebarUserContent"] { order: 1 !important; }
-
-/* ── Logo area — fills sidebar width like Flexera ───────────── */
-.sb-logo-card {
-    padding: 18px 8px 10px 8px;
-}
-.sb-logo-card img {
-    width: 100%;
-    max-width: 280px;
-    height: auto;
-    display: block;
-    opacity: 0.96;
-}
-.sb-divider {
-    border: none;
-    border-top: 1px solid #2a3f6f;
-    margin: 0 16px 6px 16px;
-}
 
 /* ── Nav links ──────────────────────────────────────────────── */
 [data-testid="stSidebarNavLink"] {
@@ -101,16 +78,6 @@ div[data-testid="stSidebarUserContent"] { order: 1 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Sidebar: logo card + section divider ──────────────────────
-if _logo_b64:
-    with st.sidebar:
-        st.markdown(
-            f'<div class="sb-logo-card">'
-            f'<img src="data:{_logo_mime};base64,{_logo_b64}" alt="CloudLens">'
-            f'</div>'
-            f'<hr class="sb-divider">',
-            unsafe_allow_html=True,
-        )
 
 pg = st.navigation([
     st.Page("pages/0_Home.py",              title="Home",                    icon=":material/dashboard:",  default=True),
