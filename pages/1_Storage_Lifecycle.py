@@ -394,12 +394,7 @@ elif acct_sub_id_col:
 else:
     display_sub_col = None
 
-# ── KPI values ────────────────────────────────────────────────────────────────
-total_subs  = len(subs_df)  if not subs_df.empty  else 0
-total_accts = len(accts_df) if not accts_df.empty else 0
-with_policy = int(accts_df["HasPolicy"].sum())    if not accts_df.empty else 0
-no_policy   = int((~accts_df["HasPolicy"]).sum()) if not accts_df.empty else 0
-cov_pct     = round(with_policy / total_accts * 100) if total_accts else 0
+# ── Static values for banner ──────────────────────────────────────────────────
 user_email  = st.session_state.get("user_email", "anmol.sharma@milliman.com")
 generated   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -417,36 +412,8 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── KPI row 1 — Policy coverage ───────────────────────────────────────────────
-k1, k2, k3, k4 = st.columns(4)
-with k1:
-    st.markdown(f"""<div class="kpi-card">
-        <div class="kpi-icon">🗂️</div>
-        <div class="kpi-value">{total_subs}</div>
-        <div class="kpi-label">Total Subscriptions</div>
-        <div class="kpi-sub">have storage accounts</div>
-    </div>""", unsafe_allow_html=True)
-with k2:
-    st.markdown(f"""<div class="kpi-card">
-        <div class="kpi-icon">🗄️</div>
-        <div class="kpi-value">{total_accts}</div>
-        <div class="kpi-label">Total Storage Accounts</div>
-        <div class="kpi-sub">Across {total_subs} subscriptions</div>
-    </div>""", unsafe_allow_html=True)
-with k3:
-    st.markdown(f"""<div class="kpi-card green">
-        <div class="kpi-icon">✅</div>
-        <div class="kpi-value green">{with_policy}</div>
-        <div class="kpi-label">Lifecycle Policy Implemented</div>
-        <div class="kpi-sub">{cov_pct}% overall coverage</div>
-    </div>""", unsafe_allow_html=True)
-with k4:
-    st.markdown(f"""<div class="kpi-card red">
-        <div class="kpi-icon">⚠️</div>
-        <div class="kpi-value red">{no_policy}</div>
-        <div class="kpi-label">No Lifecycle Policy</div>
-        <div class="kpi-sub">Storage accounts exposed</div>
-    </div>""", unsafe_allow_html=True)
+# ── KPI placeholder — filled after filters are applied ────────────────────────
+kpi_placeholder = st.empty()
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -504,6 +471,55 @@ if not filtered.empty:
         filtered = filtered[filtered["HasPolicy"] == False]
 
 csv_all = filtered.to_csv(index=False).encode() if not filtered.empty else b""
+
+# ── KPI row 1 — Policy coverage (filtered) ───────────────────────────────────
+# Determine which subscriptions are visible after all filters
+if not filtered.empty and display_sub_col:
+    _filtered_subs = filtered[display_sub_col].dropna().nunique()
+elif sel_subs:
+    _filtered_subs = len(sel_subs)
+else:
+    _filtered_subs = len(subs_df) if not subs_df.empty else 0
+
+_total_accts = len(filtered) if not filtered.empty else 0
+_with_policy = int(filtered["HasPolicy"].sum())    if not filtered.empty else 0
+_no_policy   = int((~filtered["HasPolicy"]).sum()) if not filtered.empty else 0
+_cov_pct     = round(_with_policy / _total_accts * 100) if _total_accts else 0
+
+_filter_active = bool(sel_subs or sel_accts or sel_policies or pf != "All")
+_sub_label     = f"filtered to {_filtered_subs}" if _filter_active else "have storage accounts"
+_acct_label    = f"matching current filters" if _filter_active else f"Across {_filtered_subs} subscriptions"
+
+with kpi_placeholder.container():
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.markdown(f"""<div class="kpi-card">
+            <div class="kpi-icon">🗂️</div>
+            <div class="kpi-value">{_filtered_subs}</div>
+            <div class="kpi-label">Total Subscriptions</div>
+            <div class="kpi-sub">{_sub_label}</div>
+        </div>""", unsafe_allow_html=True)
+    with k2:
+        st.markdown(f"""<div class="kpi-card">
+            <div class="kpi-icon">🗄️</div>
+            <div class="kpi-value">{_total_accts}</div>
+            <div class="kpi-label">Total Storage Accounts</div>
+            <div class="kpi-sub">{_acct_label}</div>
+        </div>""", unsafe_allow_html=True)
+    with k3:
+        st.markdown(f"""<div class="kpi-card green">
+            <div class="kpi-icon">✅</div>
+            <div class="kpi-value green">{_with_policy}</div>
+            <div class="kpi-label">Lifecycle Policy Implemented</div>
+            <div class="kpi-sub">{_cov_pct}% coverage</div>
+        </div>""", unsafe_allow_html=True)
+    with k4:
+        st.markdown(f"""<div class="kpi-card red">
+            <div class="kpi-icon">⚠️</div>
+            <div class="kpi-value red">{_no_policy}</div>
+            <div class="kpi-label">No Lifecycle Policy</div>
+            <div class="kpi-sub">Storage accounts exposed</div>
+        </div>""", unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1053,7 +1069,7 @@ if blob_loaded and blob_ts:
 
 st.markdown(f"""
 <div class="dash-footer">
-  <span>Showing {len(sub_list)} subscriptions · Accounts: {total_accts} · Covered: {with_policy} · Uncovered: {no_policy}{blob_footer}</span>
+  <span>Showing {len(sub_list)} subscriptions · Accounts: {_total_accts} · Covered: {_with_policy} · Uncovered: {_no_policy}{blob_footer}</span>
   <span>Tenant: {TENANT_ID[:8]}... · Power BI REST API · Cache: 5 min · Blob cache: 30 min · Auto-refresh: 5 min</span>
 </div>
 """, unsafe_allow_html=True)
