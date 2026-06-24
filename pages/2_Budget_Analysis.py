@@ -351,7 +351,7 @@ generated  = datetime.now().strftime("%Y-%m-%d %H:%M")
 # ── Banner ────────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div class="top-banner">
-  <div class="dash-title">Azure Budget Analysis &mdash; <span>MedInsight</span></div>
+  <div class="dash-title">Azure Budget &amp; Alerts Analysis</div>
   <div class="dash-meta">
     <span class="m">{TENANT_NAME}</span>
     <span class="m">{user_email}</span>

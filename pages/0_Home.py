@@ -70,7 +70,7 @@ with c2:
     st.markdown("""
 <div class="dash-card green">
   <div class="dash-card-icon">💰</div>
-  <div class="dash-card-title">Azure Budget Analysis</div>
+  <div class="dash-card-title">Azure Budget &amp; Alert Analysis</div>
   <div class="dash-card-desc">
     Track Azure spend against monthly budgets across all subscriptions.
     View daily burn rates, projected month-end spend, and alert threshold status.
