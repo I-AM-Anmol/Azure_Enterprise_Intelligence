@@ -453,19 +453,23 @@ with fc1:
     if status_filter is None:
         status_filter = "All"
 with fc2:
-    st.caption("SEARCH SUBSCRIPTION")
-    search = st.text_input("", placeholder="Type to search...", label_visibility="collapsed", key="search_box")
+    st.caption("FILTER BY SUBSCRIPTION NAME")
+    all_subs = sorted(df["subscription"].dropna().unique().tolist())
+    selected_subs = st.multiselect(
+        "", ["Select all"] + all_subs,
+        default=[],
+        placeholder="Filter by subscription name...",
+        label_visibility="collapsed",
+        key="sub_filter_dd"
+    )
 
 # ── Apply filters ─────────────────────────────────────────────────────────────
 filtered = df.copy()
 if status_filter != "All":
     filtered = filtered[filtered["_displayStatus"] == status_filter]
-if search.strip():
-    q = search.strip().lower()
-    filtered = filtered[
-        filtered["subscription"].str.lower().str.contains(q, na=False) |
-        filtered.get("tenantName", pd.Series(dtype=str)).str.lower().str.contains(q, na=False)
-    ]
+if selected_subs:
+    if "Select all" not in selected_subs:
+        filtered = filtered[filtered["subscription"].isin(selected_subs)]
 
 # ── Export & count ────────────────────────────────────────────────────────────
 exp_col, cnt_col = st.columns([2, 10])
