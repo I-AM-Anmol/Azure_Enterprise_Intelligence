@@ -7,6 +7,48 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
 [data-testid="stSidebarCollapseButton"] { display:none !important; }
 [data-testid="collapsedControl"] { display:none !important; }
 
+/* ── Sidebar navigation panel ── */
+[data-testid="stSidebarNav"]::before {
+    content: "DASHBOARDS";
+    display: block;
+    color: #64748b;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    padding: 28px 20px 10px 20px;
+    text-transform: uppercase;
+}
+[data-testid="stSidebarNav"] { padding-top: 0 !important; }
+[data-testid="stSidebarNavItems"] { padding: 0 8px !important; }
+[data-testid="stSidebarNavSeparator"] { display: none !important; }
+
+[data-testid="stSidebarNav"] a {
+    display: flex !important;
+    align-items: center !important;
+    padding: 9px 12px !important;
+    border-radius: 8px !important;
+    color: #94a3b8 !important;
+    text-decoration: none !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    margin-bottom: 2px !important;
+    gap: 10px !important;
+    transition: background 0.15s, color 0.15s !important;
+    background: transparent !important;
+}
+[data-testid="stSidebarNav"] a:hover {
+    background: rgba(255,255,255,0.08) !important;
+    color: #e2e8f0 !important;
+}
+[data-testid="stSidebarNav"] a[aria-current="page"] {
+    background: rgba(37,99,235,0.22) !important;
+    color: #ffffff !important;
+}
+[data-testid="stSidebarNav"] a[aria-current="page"] span { color: #ffffff !important; }
+[data-testid="stSidebarNav"] a span { color: inherit !important; font-size: 0.875rem !important; }
+[data-testid="stSidebarNav"] a img,
+[data-testid="stSidebarNav"] a svg { width: 18px !important; height: 18px !important; opacity: 0.75; flex-shrink: 0; }
+
 .landing-banner {
     background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
     border-radius: 12px; padding: 32px 36px 28px 36px; margin-bottom: 32px;
@@ -51,7 +93,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-c1, c2 = st.columns(2, gap="large")
+c1, c2, c3 = st.columns(3, gap="large")
 
 with c1:
     st.markdown("""
@@ -108,3 +150,30 @@ with c2:
 """, unsafe_allow_html=True)
     if st.button("Open Budget Analysis →", use_container_width=True, key="btn_budget"):
         st.switch_page("pages/2_Budget_Analysis.py")
+
+with c3:
+    st.markdown("""
+<div class="dash-card" style="border-top-color:#7c3aed;">
+  <div class="dash-card-icon">
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="44" height="44" rx="10" fill="#f5f3ff"/>
+      <!-- Calendar base -->
+      <rect x="8" y="12" width="28" height="22" rx="3" fill="#7c3aed" opacity="0.15"/>
+      <rect x="8" y="12" width="28" height="7" rx="3" fill="#7c3aed" opacity="0.6"/>
+      <!-- Calendar rings -->
+      <rect x="15" y="9" width="3" height="6" rx="1.5" fill="#7c3aed"/>
+      <rect x="26" y="9" width="3" height="6" rx="1.5" fill="#7c3aed"/>
+      <!-- Forecast line inside calendar -->
+      <polyline points="12,30 18,27 24,28 32,22" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <circle cx="32" cy="22" r="2" fill="#7c3aed"/>
+    </svg>
+  </div>
+  <div class="dash-card-title">12-Month Azure Spend Forecast</div>
+  <div class="dash-card-desc">
+    Dynamic year-end forecast that updates as actuals arrive. Track remaining-month burn rate,
+    confidence bands, and forecast accuracy vs prior predictions.
+  </div>
+</div>
+""", unsafe_allow_html=True)
+    if st.button("Open Annual Forecast →", use_container_width=True, key="btn_forecast"):
+        st.switch_page("pages/3_Annual_Forecast.py")
