@@ -27,6 +27,48 @@ section[data-testid="stSidebar"] { background-color:#1a2744 !important; transfor
 [data-testid="stSidebarCollapseButton"] { display:none !important; }
 [data-testid="collapsedControl"] { display:none !important; }
 
+/* ── Sidebar navigation panel ── */
+[data-testid="stSidebarNav"]::before {
+    content: "DASHBOARDS";
+    display: block;
+    color: #64748b;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    padding: 28px 20px 10px 20px;
+    text-transform: uppercase;
+}
+[data-testid="stSidebarNav"] { padding-top: 0 !important; }
+[data-testid="stSidebarNavItems"] { padding: 0 8px !important; }
+[data-testid="stSidebarNavSeparator"] { display: none !important; }
+
+[data-testid="stSidebarNav"] a {
+    display: flex !important;
+    align-items: center !important;
+    padding: 9px 12px !important;
+    border-radius: 8px !important;
+    color: #94a3b8 !important;
+    text-decoration: none !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    margin-bottom: 2px !important;
+    gap: 10px !important;
+    transition: background 0.15s, color 0.15s !important;
+    background: transparent !important;
+}
+[data-testid="stSidebarNav"] a:hover {
+    background: rgba(255,255,255,0.08) !important;
+    color: #e2e8f0 !important;
+}
+[data-testid="stSidebarNav"] a[aria-current="page"] {
+    background: rgba(37,99,235,0.22) !important;
+    color: #ffffff !important;
+}
+[data-testid="stSidebarNav"] a[aria-current="page"] span { color: #ffffff !important; }
+[data-testid="stSidebarNav"] a span { color: inherit !important; font-size: 0.875rem !important; }
+[data-testid="stSidebarNav"] a img,
+[data-testid="stSidebarNav"] a svg { width: 18px !important; height: 18px !important; opacity: 0.75; flex-shrink: 0; }
+
 .top-banner {
     background: linear-gradient(100deg, #1a3a6e 0%, #1e4d8c 60%, #2255a4 100%);
     border-radius: 12px; padding: 22px 32px 18px 32px; margin-bottom: 20px;
