@@ -190,10 +190,10 @@ def _pbi_query(token, dax, timeout=180):
 _ALL_MONTHS_DAX = """
 EVALUATE
 SUMMARIZECOLUMNS(
-    Azure_Expense_Details[Complete_Month],
-    "sortKey",   MIN(Azure_Expense_Details[Billing Period Start Date]),
-    "maxDate",   MAX(Azure_Expense_Details[Date]),
-    "totalCost", SUM(Azure_Expense_Details[Cost])
+    'Azure_Expense_Details'[Complete_Month],
+    "sortKey",   MIN('Azure_Expense_Details'[Billing Period Start Date]),
+    "maxDate",   MAX('Azure_Expense_Details'[Date]),
+    "totalCost", SUM('Azure_Expense_Details'[Cost])
 )
 ORDER BY [sortKey] ASC
 """
