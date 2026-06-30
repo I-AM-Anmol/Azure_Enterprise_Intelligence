@@ -186,17 +186,14 @@ def _pbi_query(token, dax, timeout=180):
 #  No BudgetData table — monthly budget entered via sidebar.
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Completed months only (Complete_Month <> "Incomplete").
-# Uses [Azure cost] = CALCULATE(SUMX(...Cost), exclude max date="Yes")
-# which is exactly what the PBI report shows — matches portal figures.
+# All months including "Incomplete" (current partial month).
+# FILTER/VALUES inside SUMMARIZECOLUMNS fails on the REST API at runtime
+# even though the MCP validator accepts it — strip it and filter in Python.
+# [Azure cost] = CALCULATE(SUMX(...Cost), exclude max date="Yes") — matches PBI report.
 _MONTHLY_HISTORY_DAX = """
 EVALUATE
 SUMMARIZECOLUMNS(
     Azure_Expense_Details[Complete_Month],
-    FILTER(
-        VALUES(Azure_Expense_Details[Complete_Month]),
-        Azure_Expense_Details[Complete_Month] <> "Incomplete"
-    ),
     "sortKey",   MIN(Azure_Expense_Details[Billing Period Start Date]),
     "totalCost", CALCULATE(
                      SUMX(Azure_Expense_Details, Azure_Expense_Details[Cost]),
@@ -206,21 +203,20 @@ SUMMARIZECOLUMNS(
 ORDER BY [sortKey] ASC
 """
 
-# Current-month MTD: bypass the SELECTEDVALUE slicer dependency in
-# [Current month azure cost] by directly applying Complete_Month="Incomplete".
-# Daily burn uses [Exper. azure cost daily] which already references [Azure cost].
+# Current-month MTD using CALCULATETABLE to safely apply the row filter
+# outside ROW() context — avoids REST API rejection of column filters in ROW().
 _LIVE_METRICS_DAX = """
 EVALUATE
 ROW(
     "currentMTD", CALCULATE(
-                      [Azure cost],
-                      Azure_Expense_Details[Complete_Month] = "Incomplete"
+                      SUMX(
+                          FILTER(Azure_Expense_Details,
+                                 Azure_Expense_Details[Complete_Month] = "Incomplete"),
+                          Azure_Expense_Details[Cost]
+                      )
                   ),
     "dailyBurn",  [Exper. azure cost daily],
-    "rolling12m", CALCULATE(
-                      [Azure cost],
-                      DATESINPERIOD(Azure_Expense_Details[Date], [Max_date], -365, DAY)
-                  ),
+    "rolling12m", [Rolling back 12 month azure cost],
     "maxDate",    [Max_date]
 )
 """
@@ -238,9 +234,12 @@ def fetch_monthly_history(token):
         df = _pbi_query(token, _MONTHLY_HISTORY_DAX, timeout=180)
         if not df.empty:
             df.columns = [c.lower() for c in df.columns]
-            # After strip_prefix: columns are "complete_month", "sortkey", "totalcost"
             df["totalcost"] = pd.to_numeric(df["totalcost"], errors="coerce").fillna(0)
-            # sortkey is a datetime string from Power BI — parse it to extract year/month
+            # Drop the current partial month — "Incomplete" rows are handled via
+            # the live metrics query; completed months have a real name like "Jan 2026"
+            if "complete_month" in df.columns:
+                df = df[df["complete_month"].str.strip() != "Incomplete"]
+            # sortkey is a datetime string from Power BI — parse to extract year/month
             df["sortkey"] = pd.to_datetime(df["sortkey"], errors="coerce", utc=True)
             df["usageyear"]  = df["sortkey"].dt.year.fillna(0).astype(int)
             df["usagemonth"] = df["sortkey"].dt.month.fillna(0).astype(int)
