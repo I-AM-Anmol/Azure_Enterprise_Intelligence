@@ -164,7 +164,8 @@ def _pbi_query(token, dax, timeout=180):
     if resp.status_code == 401:
         st.error(f"Power BI API 401 — {resp.text}")
         st.stop()
-    resp.raise_for_status()
+    if not resp.ok:
+        raise RuntimeError(f"PBI API {resp.status_code}: {resp.text[:1000]}")
     rows = resp.json()["results"][0]["tables"][0].get("rows", [])
     if not rows:
         return pd.DataFrame()
@@ -177,91 +178,75 @@ def _pbi_query(token, dax, timeout=180):
 #  DAX QUERIES
 #  Semantic model: MedInsight Azure Spend Analysis
 #  Table:   Azure_Expense_Details
-#  Columns: [Date] (DateTime), [Cost] (Double)
-#  Measures (on Azure_Expense_Details):
-#    [Current month azure cost]  — portal-accurate MTD spend
-#    [Exper. azure cost daily]   — average daily burn rate
-#    [Max_date]                  — latest date in the dataset
-#    [Rolling back 12 month azure cost] — 12-month rolling total
-#  No BudgetData table — monthly budget entered via sidebar.
+#  Columns: [Date] (DateTime), [Cost] (Double), [Complete_Month] (String),
+#           [Billing Period Start Date] (DateTime)
+#
+#  Single query groups all months (including current "Incomplete") by
+#  Complete_Month + year/month using only raw column aggregations.
+#  The REST API executeQueries endpoint rejects measure references inside
+#  SUMMARIZECOLUMNS/ROW — plain SUM/MIN/MAX column expressions always work.
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Groups by Complete_Month using [Azure cost] measure directly —
-# it already applies exclude max date="Yes", matching the PBI report.
-# "Incomplete" rows (current partial month) are filtered out in Python.
-_MONTHLY_HISTORY_DAX = """
+_ALL_MONTHS_DAX = """
 EVALUATE
 SUMMARIZECOLUMNS(
     Azure_Expense_Details[Complete_Month],
     "sortKey",   MIN(Azure_Expense_Details[Billing Period Start Date]),
-    "totalCost", [Azure cost]
+    "maxDate",   MAX(Azure_Expense_Details[Date]),
+    "totalCost", SUM(Azure_Expense_Details[Cost])
 )
 ORDER BY [sortKey] ASC
 """
 
-# Uses measures directly — no inline CALCULATE filters which the REST API rejects.
-# [Current month azure cost] returns MTD for the incomplete month.
-# [Exper. azure cost daily] returns the rolling daily burn rate.
-_LIVE_METRICS_DAX = """
-EVALUATE
-ROW(
-    "currentMTD", [Current month azure cost],
-    "dailyBurn",  [Exper. azure cost daily],
-    "rolling12m", [Rolling back 12 month azure cost],
-    "maxDate",    [Max_date]
-)
-"""
-
 
 @st.cache_data(ttl=300, show_spinner=False)
-def fetch_monthly_history(token):
+def fetch_all_months(token):
     """
-    Monthly cost aggregates from Azure_Expense_Details.
-    Groups by Complete_Month label; MIN(Billing Period Start Date) gives the
-    sort date from which Python extracts usageyear / usagemonth.
+    Returns (hist_df, live_row, elapsed_seconds).
+
+    hist_df  — completed months (Complete_Month != "Incomplete"), sorted by date
+    live_row — dict for the current partial month (Complete_Month == "Incomplete")
+               keys: currentmtd (float), maxdate (str)
+               dailyBurn derived in build_forecast from MTD ÷ days elapsed
     """
     t0 = time.time()
     try:
-        df = _pbi_query(token, _MONTHLY_HISTORY_DAX, timeout=180)
-        if not df.empty:
-            df.columns = [c.lower() for c in df.columns]
-            df["totalcost"] = pd.to_numeric(df["totalcost"], errors="coerce").fillna(0)
-            # Drop the current partial month — "Incomplete" rows are handled via
-            # the live metrics query; completed months have a real name like "Jan 2026"
-            if "complete_month" in df.columns:
-                df = df[df["complete_month"].str.strip() != "Incomplete"]
-            # sortkey is a datetime string from Power BI — parse to extract year/month
-            df["sortkey"] = pd.to_datetime(df["sortkey"], errors="coerce", utc=True)
-            df["usageyear"]  = df["sortkey"].dt.year.fillna(0).astype(int)
-            df["usagemonth"] = df["sortkey"].dt.month.fillna(0).astype(int)
-            df = df[df["usageyear"] > 0].sort_values(["usageyear", "usagemonth"])
+        df = _pbi_query(token, _ALL_MONTHS_DAX, timeout=180)
     except Exception as exc:
-        st.warning(f"Could not query Azure_Expense_Details monthly history: {exc}")
-        df = pd.DataFrame()
-    return df, round(time.time() - t0, 1)
+        st.warning(f"Could not query Azure_Expense_Details: {exc}")
+        return pd.DataFrame(), {}, round(time.time() - t0, 1)
 
+    if df.empty:
+        return pd.DataFrame(), {}, round(time.time() - t0, 1)
 
-@st.cache_data(ttl=300)
-def fetch_live_metrics(token):
-    """
-    Scalar live figures from semantic model measures:
-      currentMTD  — [Current month azure cost] (portal-accurate MTD)
-      dailyBurn   — [Exper. azure cost daily]  (avg $/day this month)
-      rolling12m  — [Rolling back 12 month azure cost]
-      maxDate     — [Max_date]
-    """
-    t0 = time.time()
-    try:
-        df = _pbi_query(token, _LIVE_METRICS_DAX, timeout=60)
-        if not df.empty:
-            df.columns = [c.lower() for c in df.columns]
-            for c in ["currentmtd", "dailyburn", "rolling12m"]:
-                if c in df.columns:
-                    df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
-    except Exception as exc:
-        st.warning(f"Could not query live metrics: {exc}")
-        df = pd.DataFrame()
-    return df, round(time.time() - t0, 1)
+    df.columns = [c.lower() for c in df.columns]
+    df["totalcost"] = pd.to_numeric(df["totalcost"], errors="coerce").fillna(0)
+    df["sortkey"]   = pd.to_datetime(df["sortkey"], errors="coerce", utc=True)
+    df["maxdate"]   = pd.to_datetime(df["maxdate"],  errors="coerce", utc=True)
+
+    # Split incomplete vs completed
+    is_incomplete = df["complete_month"].str.strip() == "Incomplete"
+    inc_df  = df[is_incomplete]
+    hist_df = df[~is_incomplete].copy()
+
+    # Build live_row from the incomplete row (current partial month)
+    live_row: dict = {}
+    if not inc_df.empty:
+        row = inc_df.iloc[0]
+        live_row["currentmtd"] = float(row["totalcost"])
+        live_row["maxdate"]    = str(row["maxdate"])[:10] if pd.notna(row["maxdate"]) else "—"
+    else:
+        # No incomplete row → infer from the last row's maxdate
+        if not hist_df.empty:
+            live_row["currentmtd"] = 0.0
+            live_row["maxdate"]    = str(df["maxdate"].max())[:10]
+
+    # Enrich completed months with year/month integers for sorting
+    hist_df["usageyear"]  = hist_df["sortkey"].dt.year.fillna(0).astype(int)
+    hist_df["usagemonth"] = hist_df["sortkey"].dt.month.fillna(0).astype(int)
+    hist_df = hist_df[hist_df["usageyear"] > 0].sort_values(["usageyear", "usagemonth"])
+
+    return hist_df, live_row, round(time.time() - t0, 1)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -287,12 +272,13 @@ def build_forecast(hist_df: pd.DataFrame, live_row: dict, today: datetime, month
     curr_yr  = today.year
     curr_mo  = today.month
 
-    # ── Live figures from semantic model measures ─────────────────────────────
-    current_actual  = float(live_row.get("currentmtd",  0) or 0)   # [Current month azure cost]
-    current_burn    = float(live_row.get("dailyburn",   0) or 0)   # [Exper. azure cost daily]
+    # ── Live figures from current partial-month row ───────────────────────────
+    current_actual  = float(live_row.get("currentmtd", 0) or 0)
     days_in_curr_mo = monthrange(curr_yr, curr_mo)[1]
     days_passed     = today.day
     days_remaining  = days_in_curr_mo - days_passed
+    # Derive daily burn from MTD ÷ days elapsed (no measure reference needed)
+    current_burn    = (current_actual / days_passed) if days_passed > 0 and current_actual > 0 else 0
 
     # Project EOM from live daily burn × remaining days
     projected_eom = current_actual + current_burn * days_remaining
@@ -407,7 +393,7 @@ def build_forecast(hist_df: pd.DataFrame, live_row: dict, today: datetime, month
         "days_in_curr_mo":  days_in_curr_mo,
         "rolling_avg":      rolling_avg,
         "completed_count":  len(completed),
-        "rolling12m":       float(live_row.get("rolling12m", 0) or 0),
+        "rolling12m":       0,  # not available without measure reference
     }
     return rows, meta
 
@@ -458,19 +444,15 @@ token = get_token()
 today = datetime.now()
 
 with st.spinner("Loading Azure spend data from MedInsight Azure Spend Analysis…"):
-    hist_df,  hist_elapsed  = fetch_monthly_history(token)
-    live_df,  live_elapsed  = fetch_live_metrics(token)
+    hist_df, live_row, elapsed = fetch_all_months(token)
 
-if hist_df.empty and live_df.empty:
+if hist_df.empty and not live_row:
     st.warning(
         "No data returned from the Semantic Model.\n\n"
         "Workspace: **MI - Azure Cost Analysis and FinOps Dashboard**\n\n"
         "Dataset: **MedInsight Azure Spend Analysis**"
     )
     st.stop()
-
-# Flatten the single-row live metrics
-live_row = live_df.iloc[0].to_dict() if not live_df.empty else {}
 
 rows, meta = build_forecast(hist_df, live_row, today, float(monthly_budget_input))
 yef        = year_end_forecast(rows)
@@ -490,7 +472,7 @@ budget_vs_yef    = round(yef / annual_budget * 100, 1) if annual_budget > 0 else
 # ══════════════════════════════════════════════════════════════════════════════
 #  BANNER
 # ══════════════════════════════════════════════════════════════════════════════
-max_date_str = str(live_row.get("maxdate", "—"))[:10] if live_row else "—"
+max_date_str = str(live_row.get("maxdate", "—"))[:10]
 
 st.markdown(f"""
 <div class="top-banner">
@@ -501,22 +483,21 @@ st.markdown(f"""
     <span class="m">Generated: {generated}</span>
     <span class="m">Rolling avg (last 3 mo): ${meta['rolling_avg']/1000:.1f}K/mo</span>
     <span class="m">Current burn: ${meta['current_burn']/1000:.2f}K/day &nbsp;·&nbsp; {meta['days_remaining']}d left</span>
-    <span class="m">Data as of: {max_date_str} &nbsp;·&nbsp; History: {hist_elapsed}s · Live: {live_elapsed}s</span>
+    <span class="m">Data as of: {max_date_str} &nbsp;·&nbsp; Query: {elapsed}s</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
 # Data-source transparency strip
-rolling12m_str = f"${meta['rolling12m']/1000:.0f}K" if meta.get('rolling12m') else "—"
 st.markdown(f"""
 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;
             font-size:11px;color:#475569;display:flex;gap:20px;flex-wrap:wrap;margin-bottom:16px;">
-  <span>📊 <b>Actuals</b> <span class="source-tag grn">[Azure cost] · exclude max date="Yes" · Complete_Month≠"Incomplete"</span>
-        &nbsp;{len(hist_df)} completed months — same filter as PBI report</span>
-  <span>💰 <b>Current MTD</b> <span class="source-tag">CALCULATE([Azure cost], Complete_Month="Incomplete")</span>
+  <span>📊 <b>Actuals</b> <span class="source-tag grn">SUM(Cost) · Complete_Month≠"Incomplete"</span>
+        &nbsp;{len(hist_df)} completed months</span>
+  <span>💰 <b>Current MTD</b> <span class="source-tag">SUM(Cost) · Complete_Month="Incomplete"</span>
         &nbsp;${meta['current_actual']/1000:.1f}K</span>
-  <span>🔥 <b>Daily burn</b> <span class="source-tag ora">[Exper. azure cost daily]</span>
-        &nbsp;${meta['current_burn']/1000:.2f}K/day · Rolling 12m: {rolling12m_str}</span>
+  <span>🔥 <b>Daily burn</b> <span class="source-tag ora">MTD ÷ days elapsed</span>
+        &nbsp;${meta['current_burn']/1000:.2f}K/day</span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -929,9 +910,9 @@ with col_stats:
     st.markdown("""
 <div class="method-box" style="margin-top:12px;">
   <b>Data sourcing — MedInsight Azure Spend Analysis</b><br>
-  <b>Actuals</b> — <code>CALCULATE(SUMX([Cost]), exclude max date="Yes")</code> · Complete_Month ≠ "Incomplete" · identical to PBI report<br>
-  <b>Current month MTD</b> — <code>CALCULATE([Azure cost], Complete_Month="Incomplete")</code> · bypasses slicer dependency<br>
-  <b>Daily burn</b> — <code>[Exper. azure cost daily]</code> measure<br>
+  <b>Actuals</b> — <code>SUM(Azure_Expense_Details[Cost])</code> · Complete_Month ≠ "Incomplete"<br>
+  <b>Current month MTD</b> — SUM(Cost) where Complete_Month = "Incomplete"<br>
+  <b>Daily burn</b> — MTD ÷ days elapsed in current month<br>
   <b>EOM projection</b> — MTD + daily burn × days remaining in month<br>
   <b>Future forecast</b> — 70% rolling 3-month avg + 30% burn × days in month<br>
   <b>Confidence band</b> — ±15% base, +2%/month out<br>
