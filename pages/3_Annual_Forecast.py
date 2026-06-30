@@ -186,35 +186,26 @@ def _pbi_query(token, dax, timeout=180):
 #  No BudgetData table — monthly budget entered via sidebar.
 # ══════════════════════════════════════════════════════════════════════════════
 
-# All months including "Incomplete" (current partial month).
-# FILTER/VALUES inside SUMMARIZECOLUMNS fails on the REST API at runtime
-# even though the MCP validator accepts it — strip it and filter in Python.
-# [Azure cost] = CALCULATE(SUMX(...Cost), exclude max date="Yes") — matches PBI report.
+# Groups by Complete_Month using [Azure cost] measure directly —
+# it already applies exclude max date="Yes", matching the PBI report.
+# "Incomplete" rows (current partial month) are filtered out in Python.
 _MONTHLY_HISTORY_DAX = """
 EVALUATE
 SUMMARIZECOLUMNS(
     Azure_Expense_Details[Complete_Month],
     "sortKey",   MIN(Azure_Expense_Details[Billing Period Start Date]),
-    "totalCost", CALCULATE(
-                     SUMX(Azure_Expense_Details, Azure_Expense_Details[Cost]),
-                     Azure_Expense_Details[exclude max date] = "Yes"
-                 )
+    "totalCost", [Azure cost]
 )
 ORDER BY [sortKey] ASC
 """
 
-# Current-month MTD using CALCULATETABLE to safely apply the row filter
-# outside ROW() context — avoids REST API rejection of column filters in ROW().
+# Uses measures directly — no inline CALCULATE filters which the REST API rejects.
+# [Current month azure cost] returns MTD for the incomplete month.
+# [Exper. azure cost daily] returns the rolling daily burn rate.
 _LIVE_METRICS_DAX = """
 EVALUATE
 ROW(
-    "currentMTD", CALCULATE(
-                      SUMX(
-                          FILTER(Azure_Expense_Details,
-                                 Azure_Expense_Details[Complete_Month] = "Incomplete"),
-                          Azure_Expense_Details[Cost]
-                      )
-                  ),
+    "currentMTD", [Current month azure cost],
     "dailyBurn",  [Exper. azure cost daily],
     "rolling12m", [Rolling back 12 month azure cost],
     "maxDate",    [Max_date]
@@ -222,7 +213,7 @@ ROW(
 """
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_monthly_history(token):
     """
     Monthly cost aggregates from Azure_Expense_Details.
