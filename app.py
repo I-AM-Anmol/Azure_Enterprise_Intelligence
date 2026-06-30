@@ -113,6 +113,7 @@ pg = st.navigation([
     st.Page("pages/0_Home.py",              title="Home",                    icon=":material/dashboard:", default=True),
     st.Page("pages/1_Storage_Lifecycle.py", title="Storage Lifecycle",       icon=":material/layers:"),
     st.Page("pages/2_Budget_Analysis.py",   title="Budget & Alert Analysis", icon=":material/bar_chart:"),
+    st.Page("pages/3_Annual_Forecast.py",   title="Annual Forecast",         icon=":material/calendar_month:"),
 ])
 
 pg.run()
