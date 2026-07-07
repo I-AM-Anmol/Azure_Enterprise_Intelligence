@@ -4,25 +4,21 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
-import math
 import time
 from datetime import datetime
 from calendar import monthrange
 from azure.identity import AzureCliCredential, ClientSecretCredential
 from streamlit_autorefresh import st_autorefresh
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+# ── Configuration ──────────────────────────────────────────────────────────────
 TENANT_ID    = "e240d61e-61e3-4c9e-ab90-8644b2f4d2a9"
 WORKSPACE_ID = "eca3c81e-a968-42a5-899f-d8fc1a45ebec"
-DATASET_ID   = "56e6e1c3-8b70-4c53-b288-331041ce1f3f"
-CLIENT_ID    = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+DATASET_ID   = "10b45f31-71d5-463c-ac78-bce785b9fd8f"   # Azure_Spend__Forecast
 TENANT_NAME  = "MedInsight Production · Engineering · Milliman"
-# Semantic model: MedInsight Azure Spend Analysis
-# Workspace:      MI - Azure Cost Analysis and FinOps Dashboard
 
 st_autorefresh(interval=300000)
 
-# ── CSS ───────────────────────────────────────────────────────────────────────
+# ── CSS ────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 #MainMenu, footer, [data-testid="stToolbar"] { display:none !important; }
@@ -31,26 +27,26 @@ section[data-testid="stSidebar"] {
   display:block !important; visibility:visible !important; min-width:260px !important;
 }
 [data-testid="stSidebarCollapseButton"] { display:none !important; }
-[data-testid="collapsedControl"] { display:none !important; }
+[data-testid="collapsedControl"]        { display:none !important; }
 
 .top-banner {
   background: linear-gradient(100deg, #1a3a6e 0%, #1e4d8c 60%, #2255a4 100%);
-  border-radius: 12px; padding: 22px 32px 18px 32px; margin-bottom: 20px;
-  box-shadow: 0 4px 18px rgba(26,58,110,0.20); position: relative; overflow: hidden;
+  border-radius:12px; padding:22px 32px 18px 32px; margin-bottom:20px;
+  box-shadow:0 4px 18px rgba(26,58,110,0.20); position:relative; overflow:hidden;
 }
 .top-banner::before {
-  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
-  background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
-  border-radius: 12px 0 0 12px;
+  content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
+  background:linear-gradient(180deg,#60a5fa 0%,#2563eb 100%);
+  border-radius:12px 0 0 12px;
 }
-.top-banner .dash-title { font-size:1.55rem; font-weight:700; color:#fff; line-height:1.3; letter-spacing:-0.02em; }
+.top-banner .dash-title { font-size:1.55rem; font-weight:700; color:#fff; line-height:1.3; }
 .top-banner .dash-title span { color:#60a5fa; }
 .top-banner .dash-meta { display:flex; gap:0; flex-wrap:wrap; margin-top:8px; align-items:center; }
 .top-banner .dash-meta .m {
   font-size:0.73rem; color:rgba(255,255,255,0.55);
   padding-right:14px; margin-right:14px; border-right:1px solid rgba(255,255,255,0.15);
 }
-.top-banner .dash-meta .m:last-child { border-right:none; padding-right:0; margin-right:0; }
+.top-banner .dash-meta .m:last-child { border-right:none; }
 
 .kpi-card {
   background:#fff; border-radius:10px; padding:16px 18px;
@@ -65,7 +61,6 @@ section[data-testid="stSidebar"] {
 .kpi-val { font-size:1.9rem; font-weight:700; color:#0f172a; line-height:1.1; }
 .kpi-val.red { color:#dc2626; } .kpi-val.grn { color:#16a34a; }
 .kpi-val.ora { color:#ea580c; } .kpi-val.blu { color:#2563eb; }
-.kpi-val.pur { color:#7c3aed; }
 .kpi-sub { font-size:0.71rem; color:#64748b; margin-top:3px; }
 
 .section-label {
@@ -75,10 +70,9 @@ section[data-testid="stSidebar"] {
 .source-tag {
   display:inline-block; font-size:10px; font-weight:600; padding:1px 7px;
   border-radius:4px; background:#eff6ff; color:#2563eb;
-  border:1px solid #bfdbfe; margin-left:8px; vertical-align:middle;
+  border:1px solid #bfdbfe; margin-left:6px;
 }
 .source-tag.grn { background:#f0fdf4; color:#15803d; border-color:#86efac; }
-.source-tag.ora { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
 
 .fg-wrap { overflow-x:auto; border-radius:8px; border:1px solid #e2e8f0; }
 table.fg { width:100%; border-collapse:collapse; font-size:12px; }
@@ -86,48 +80,42 @@ table.fg thead tr { background:#f8fafc; border-bottom:2px solid #e2e8f0; }
 table.fg th { padding:9px 12px; text-align:left; font-size:11px; font-weight:600;
               text-transform:uppercase; letter-spacing:.05em; color:#64748b; white-space:nowrap; }
 table.fg th.num { text-align:right; }
-table.fg td { padding:7px 12px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+table.fg td { padding:7px 12px; border-bottom:1px solid #f1f5f9; }
 table.fg td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 table.fg tr.row-actual   td { background:#f0fdf4; }
 table.fg tr.row-current  td { background:#eff6ff; font-weight:600; }
 table.fg tr.row-forecast td { background:#fafafa; color:#64748b; }
 table.fg tr.row-over     td { background:#fef2f2; }
-table.fg tr:hover td { background:#f8fafc; }
+table.fg tr:hover td     { background:#f8fafc; }
 
 .mtype-actual   { background:#dcfce7; color:#15803d; border-radius:4px; padding:1px 7px; font-size:10px; font-weight:600; display:inline-block; }
 .mtype-current  { background:#dbeafe; color:#1d4ed8; border-radius:4px; padding:1px 7px; font-size:10px; font-weight:600; display:inline-block; }
-.mtype-forecast { background:#f1f5f9; color:#64748b; border-radius:4px; padding:1px 7px; font-size:10px; font-weight:600; display:inline-block; }
+.mtype-forecast { background:#f1f5f9; color:#64748b;  border-radius:4px; padding:1px 7px; font-size:10px; font-weight:600; display:inline-block; }
+
 .acc-badge { display:inline-flex; align-items:center; padding:3px 10px; border-radius:20px;
              font-size:10px; font-weight:700; letter-spacing:.04em; white-space:nowrap; }
 .acc-good  { background:#dcfce7; color:#16a34a; border:1px solid #86efac; }
 .acc-ok    { background:#fef9c3; color:#ca8a04; border:1px solid #fde047; }
 .acc-poor  { background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; }
-.pill-row  { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 14px 0; }
 
 .method-box {
   background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
   padding:14px 16px; font-size:11px; color:#475569; line-height:1.7; margin-top:12px;
 }
-.method-box b { color:#0f172a; }
-
 .dash-footer {
   font-size:0.7rem; color:#94a3b8; margin-top:24px; padding-top:10px;
   border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;
 }
-
-[data-testid="stPlotlyChart"] { border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }
-
 .stDownloadButton > button {
   background:#2563eb !important; color:#fff !important;
   border:none !important; border-radius:6px !important;
   font-size:0.78rem !important; padding:7px 18px !important; font-weight:600 !important;
 }
-.stDownloadButton > button:hover { background:#1d4ed8 !important; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ── Auth ──────────────────────────────────────────────────────────────────────
+# ── Auth ───────────────────────────────────────────────────────────────────────
 def get_token():
     try:
         az = st.secrets["azure"]
@@ -139,10 +127,7 @@ def get_token():
         cred = AzureCliCredential(tenant_id=TENANT_ID)
         return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
     except Exception as e:
-        st.error(
-            f"Authentication failed. Configure **[azure]** secrets or run "
-            f"`az login --tenant {TENANT_ID}` locally.\nError: {e}"
-        )
+        st.error(f"Auth failed. Run `az login --tenant {TENANT_ID}` locally.\n{e}")
         st.stop()
 
 
@@ -150,7 +135,7 @@ def strip_prefix(col):
     return col.split("[")[-1].rstrip("]") if "[" in col else col
 
 
-def _pbi_query(token, dax, timeout=180):
+def _pbi_query(token, dax, timeout=60):
     url = (
         f"https://api.powerbi.com/v1.0/myorg/groups/{WORKSPACE_ID}"
         f"/datasets/{DATASET_ID}/executeQueries"
@@ -165,7 +150,7 @@ def _pbi_query(token, dax, timeout=180):
         st.error(f"Power BI API 401 — {resp.text}")
         st.stop()
     if not resp.ok:
-        raise RuntimeError(f"PBI API {resp.status_code}: {resp.text[:1000]}")
+        raise RuntimeError(f"PBI API {resp.status_code}: {resp.text[:800]}")
     rows = resp.json()["results"][0]["tables"][0].get("rows", [])
     if not rows:
         return pd.DataFrame()
@@ -174,146 +159,103 @@ def _pbi_query(token, dax, timeout=180):
     return df
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  DAX QUERIES
-#  Semantic model: MedInsight Azure Spend Analysis
-#  Table:   Azure_Expense_Details
-#  Columns: [Date] (DateTime), [Cost] (Double), [Complete_Month] (String),
-#           [Billing Period Start Date] (DateTime)
-#
-#  Single query groups all months (including current "Incomplete") by
-#  Complete_Month + year/month using only raw column aggregations.
-#  The REST API executeQueries endpoint rejects measure references inside
-#  SUMMARIZECOLUMNS/ROW — plain SUM/MIN/MAX column expressions always work.
-# ══════════════════════════════════════════════════════════════════════════════
-
-_ALL_MONTHS_DAX = """
+# ── DAX — single flat query against Azure_Spend__Forecast model ───────────────
+# Table: Azure_spend_Analysis
+# Columns: billing_period_start_date, complete_month, total_cost,
+#          max_date, days_in_month, days_with_data
+_DAX = """
 EVALUATE
 SUMMARIZECOLUMNS(
-    'Azure_Expense_Details'[Complete_Month],
-    "sortKey",   MIN('Azure_Expense_Details'[Billing Period Start Date]),
-    "maxDate",   MAX('Azure_Expense_Details'[Date]),
-    "totalCost", SUM('Azure_Expense_Details'[Cost])
+    'Azure_spend_Analysis'[complete_month],
+    'Azure_spend_Analysis'[billing_period_start_date],
+    'Azure_spend_Analysis'[max_date],
+    'Azure_spend_Analysis'[days_in_month],
+    'Azure_spend_Analysis'[days_with_data],
+    "total_cost", SUM('Azure_spend_Analysis'[total_cost])
 )
-ORDER BY [sortKey] ASC
+ORDER BY 'Azure_spend_Analysis'[billing_period_start_date] ASC
 """
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def fetch_all_months(token):
-    """
-    Returns (hist_df, live_row, elapsed_seconds).
-
-    hist_df  — completed months (Complete_Month != "Incomplete"), sorted by date
-    live_row — dict for the current partial month (Complete_Month == "Incomplete")
-               keys: currentmtd (float), maxdate (str)
-               dailyBurn derived in build_forecast from MTD ÷ days elapsed
-    """
+def fetch_spend_data(token):
     t0 = time.time()
     try:
-        df = _pbi_query(token, _ALL_MONTHS_DAX, timeout=180)
+        df = _pbi_query(token, _DAX)
     except Exception as exc:
-        st.warning(f"Could not query Azure_Expense_Details: {exc}")
+        st.warning(f"Could not query Azure_spend_Analysis: {exc}")
         return pd.DataFrame(), {}, round(time.time() - t0, 1)
 
     if df.empty:
         return pd.DataFrame(), {}, round(time.time() - t0, 1)
 
     df.columns = [c.lower() for c in df.columns]
-    df["totalcost"] = pd.to_numeric(df["totalcost"], errors="coerce").fillna(0)
-    df["sortkey"]   = pd.to_datetime(df["sortkey"], errors="coerce", utc=True)
-    df["maxdate"]   = pd.to_datetime(df["maxdate"],  errors="coerce", utc=True)
+    df["total_cost"]                 = pd.to_numeric(df["total_cost"], errors="coerce").fillna(0)
+    df["days_in_month"]              = pd.to_numeric(df["days_in_month"], errors="coerce").fillna(0).astype(int)
+    df["days_with_data"]             = pd.to_numeric(df["days_with_data"], errors="coerce").fillna(0).astype(int)
+    df["billing_period_start_date"]  = pd.to_datetime(df["billing_period_start_date"], errors="coerce", utc=True)
+    df["max_date"]                   = pd.to_datetime(df["max_date"], errors="coerce", utc=True)
 
-    # Split incomplete vs completed
+    # Split incomplete (current partial month) vs completed months
     is_incomplete = df["complete_month"].str.strip() == "Incomplete"
-    inc_df  = df[is_incomplete]
-    hist_df = df[~is_incomplete].copy()
+    hist_df       = df[~is_incomplete].copy()
+    inc_df        = df[is_incomplete]
 
-    # Build live_row from the incomplete row (current partial month)
-    live_row: dict = {}
-    if not inc_df.empty:
-        row = inc_df.iloc[0]
-        live_row["currentmtd"] = float(row["totalcost"])
-        live_row["maxdate"]    = str(row["maxdate"])[:10] if pd.notna(row["maxdate"]) else "—"
-    else:
-        # No incomplete row → infer from the last row's maxdate
-        if not hist_df.empty:
-            live_row["currentmtd"] = 0.0
-            live_row["maxdate"]    = str(df["maxdate"].max())[:10]
-
-    # Enrich completed months with year/month integers for sorting
-    hist_df["usageyear"]  = hist_df["sortkey"].dt.year.fillna(0).astype(int)
-    hist_df["usagemonth"] = hist_df["sortkey"].dt.month.fillna(0).astype(int)
+    hist_df["usageyear"]  = hist_df["billing_period_start_date"].dt.year.fillna(0).astype(int)
+    hist_df["usagemonth"] = hist_df["billing_period_start_date"].dt.month.fillna(0).astype(int)
     hist_df = hist_df[hist_df["usageyear"] > 0].sort_values(["usageyear", "usagemonth"])
+
+    live_row = {}
+    if not inc_df.empty:
+        r = inc_df.iloc[0]
+        live_row["currentmtd"]    = float(r["total_cost"])
+        live_row["days_in_month"] = int(r["days_in_month"])
+        live_row["days_with_data"]= int(r["days_with_data"])
+        live_row["maxdate"]       = str(r["max_date"])[:10] if pd.notna(r["max_date"]) else "—"
+    elif not hist_df.empty:
+        live_row["currentmtd"]    = 0.0
+        live_row["days_in_month"] = 0
+        live_row["days_with_data"]= 0
+        live_row["maxdate"]       = str(df["max_date"].max())[:10]
 
     return hist_df, live_row, round(time.time() - t0, 1)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  FORECAST ENGINE
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Forecast engine ────────────────────────────────────────────────────────────
+def build_forecast(hist_df, live_row, today, monthly_budget):
+    curr_yr = today.year
+    curr_mo = today.month
 
-def build_forecast(hist_df: pd.DataFrame, live_row: dict, today: datetime, monthly_budget: float):
-    """
-    Returns (rows_list, meta_dict).
-
-    Data sourcing per month type
-    ────────────────────────────
-    ACTUAL  (month < current):  Azure_Expense_Details[Date/Cost] grouped sum
-    CURRENT (month == current): [Current month azure cost] measure  ← portal-accurate MTD
-                                projected EOM via [Exper. azure cost daily] × days in month
-    FORECAST (month > current): 70% rolling-3m avg + 30% burn×days ← computed
-
-    Forecast accuracy
-    ─────────────────
-    For each completed month we back-calculate what the model would have predicted
-    (rolling avg of the 3 preceding months) and compare to the actual.
-    """
-    curr_yr  = today.year
-    curr_mo  = today.month
-
-    # ── Live figures from current partial-month row ───────────────────────────
-    current_actual  = float(live_row.get("currentmtd", 0) or 0)
-    days_in_curr_mo = monthrange(curr_yr, curr_mo)[1]
-    days_passed     = today.day
-    days_remaining  = days_in_curr_mo - days_passed
-    # Derive daily burn from MTD ÷ days elapsed (no measure reference needed)
-    current_burn    = (current_actual / days_passed) if days_passed > 0 and current_actual > 0 else 0
-
-    # Project EOM from live daily burn × remaining days
-    projected_eom = current_actual + current_burn * days_remaining
+    current_actual   = float(live_row.get("currentmtd", 0) or 0)
+    days_in_curr_mo  = int(live_row.get("days_in_month", monthrange(curr_yr, curr_mo)[1]))
+    days_with_data   = int(live_row.get("days_with_data", today.day))
+    days_remaining   = days_in_curr_mo - days_with_data
+    # Daily burn from actual MTD ÷ days elapsed
+    current_burn     = (current_actual / days_with_data) if days_with_data > 0 and current_actual > 0 else 0
+    projected_eom    = current_actual + current_burn * days_remaining
     if projected_eom <= 0 and current_actual > 0:
-        projected_eom = current_actual  # at least what we've spent
+        projected_eom = current_actual
 
-    # ── Build lookup: actual monthly spend from Azure_Expense_Details ─────────
-    actual_by_ym: dict = {}
+    # Build year/month → cost lookup from completed months
+    actual_by_ym = {}
     if not hist_df.empty:
         for _, row in hist_df.iterrows():
-            yr = int(row["usageyear"])
-            mo = int(row["usagemonth"])
-            actual_by_ym[(yr, mo)] = float(row["totalcost"])
+            actual_by_ym[(int(row["usageyear"]), int(row["usagemonth"]))] = float(row["total_cost"])
 
-    # ── Rolling 3-month average from completed months ─────────────────────────
-    completed = [
-        actual_by_ym[(curr_yr, m)]
-        for m in range(1, curr_mo)
-        if (curr_yr, m) in actual_by_ym
-    ]
+    # Rolling 3-month average from completed months this year
+    completed = [actual_by_ym[(curr_yr, m)] for m in range(1, curr_mo) if (curr_yr, m) in actual_by_ym]
     if len(completed) >= 3:
         rolling_avg = sum(completed[-3:]) / 3
     elif completed:
         rolling_avg = sum(completed) / len(completed)
     else:
-        # No history yet — fall back to monthly budget
         rolling_avg = monthly_budget
 
-    # ── Confidence band: ±15% base, widens 2% per month into the future ──────
     def band(base, months_out):
         spread = 0.15 + months_out * 0.02
         return round(base * (1 - spread), 2), round(base * (1 + spread), 2)
 
-    month_names = ["Jan","Feb","Mar","Apr","May","Jun",
-                   "Jul","Aug","Sep","Oct","Nov","Dec"]
+    month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
     rows = []
 
     for m in range(1, 13):
@@ -321,27 +263,23 @@ def build_forecast(hist_df: pd.DataFrame, live_row: dict, today: datetime, month
         label = f"{month_names[m-1]} {curr_yr}"
 
         if m < curr_mo:
-            # ── ACTUAL: from Azure_Expense_Details ──────────────────────────
             actual   = actual_by_ym.get((curr_yr, m))
             row_type = "actual"
             forecast = actual
             lo, hi   = (actual, actual) if actual is not None else (None, None)
             burn_day = (actual / dim) if actual else None
-            accuracy = None  # filled below
+            accuracy = None
 
         elif m == curr_mo:
-            # ── CURRENT: portal-accurate figures from live measures ──────────
-            actual   = current_actual    # [Current month azure cost] measure
+            actual   = current_actual
             row_type = "current"
-            forecast = projected_eom     # MTD + daily burn × days remaining
+            forecast = projected_eom
             lo, hi   = band(forecast, 0)
-            burn_day = current_burn      # [Exper. azure cost daily] measure
+            burn_day = current_burn
             accuracy = None
 
         else:
-            # ── FORECAST: computed ────────────────────────────────────────────
-            months_out = m - curr_mo
-            # Blend rolling history with live burn rate signal
+            months_out  = m - curr_mo
             burn_extrap = (current_burn * dim) if current_burn > 0 else rolling_avg
             forecast    = round(0.70 * rolling_avg + 0.30 * burn_extrap, 2)
             actual      = None
@@ -351,31 +289,18 @@ def build_forecast(hist_df: pd.DataFrame, live_row: dict, today: datetime, month
             accuracy    = None
 
         rows.append({
-            "month_num":     m,
-            "month_name":    month_names[m-1],
-            "year":          curr_yr,
-            "label":         label,
-            "type":          row_type,
-            "actual":        actual,
-            "budget":        monthly_budget,
-            "forecast":      forecast,
-            "lower":         lo,
-            "upper":         hi,
-            "burn_day":      burn_day,
-            "days_in_month": dim,
-            "accuracy":      None,
+            "month_num": m, "month_name": month_names[m-1], "year": curr_yr,
+            "label": label, "type": row_type,
+            "actual": actual, "budget": monthly_budget,
+            "forecast": forecast, "lower": lo, "upper": hi,
+            "burn_day": burn_day, "days_in_month": dim, "accuracy": None,
         })
 
-    # ── Back-calculate forecast accuracy for completed months ─────────────────
+    # Back-calculate forecast accuracy for completed months
     for i, row in enumerate(rows):
         if row["type"] != "actual" or row["actual"] is None:
             continue
-        # What would rolling-3m have predicted for month i?
-        preceding = [
-            rows[j]["actual"]
-            for j in range(max(0, i - 3), i)
-            if rows[j]["actual"] is not None
-        ]
+        preceding = [rows[j]["actual"] for j in range(max(0, i-3), i) if rows[j]["actual"] is not None]
         if not preceding:
             continue
         implied = sum(preceding) / len(preceding)
@@ -383,52 +308,39 @@ def build_forecast(hist_df: pd.DataFrame, live_row: dict, today: datetime, month
             rows[i]["accuracy"] = round(100 - abs(row["actual"] - implied) / row["actual"] * 100, 1)
 
     meta = {
-        "monthly_budget":   monthly_budget,
-        "annual_budget":    monthly_budget * 12,
-        "current_actual":   current_actual,
-        "current_burn":     current_burn,
-        "projected_eom":    projected_eom,
-        "days_remaining":   days_remaining,
-        "days_passed":      days_passed,
-        "days_in_curr_mo":  days_in_curr_mo,
-        "rolling_avg":      rolling_avg,
-        "completed_count":  len(completed),
-        "rolling12m":       0,  # not available without measure reference
+        "monthly_budget":  monthly_budget,
+        "annual_budget":   monthly_budget * 12,
+        "current_actual":  current_actual,
+        "current_burn":    current_burn,
+        "projected_eom":   projected_eom,
+        "days_remaining":  days_remaining,
+        "days_with_data":  days_with_data,
+        "days_in_curr_mo": days_in_curr_mo,
+        "rolling_avg":     rolling_avg,
+        "completed_count": len(completed),
     }
     return rows, meta
 
 
 def year_end_forecast(rows):
-    total = 0.0
-    for r in rows:
-        if r["type"] == "actual" and r["actual"] is not None:
-            total += r["actual"]
-        elif r["forecast"] is not None:
-            total += r["forecast"]
-    return total
-
+    return sum(
+        r["actual"] if r["type"] == "actual" and r["actual"] is not None
+        else (r["forecast"] or 0)
+        for r in rows
+    )
 
 def avg_accuracy(rows):
     vals = [r["accuracy"] for r in rows if r.get("accuracy") is not None]
     return round(sum(vals) / len(vals), 1) if vals else None
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  SIDEBAR – monthly budget input (no BudgetData table in this model)
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown(
-        "<div style='color:#fff;font-size:0.8rem;font-weight:700;margin-bottom:6px;'>💰 Monthly Budget</div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("<div style='color:#fff;font-size:0.8rem;font-weight:700;margin-bottom:6px;'>💰 Monthly Budget</div>",
+                unsafe_allow_html=True)
     monthly_budget_input = st.number_input(
-        "Monthly budget ($)",
-        min_value=0,
-        value=480_000,
-        step=10_000,
-        format="%d",
-        label_visibility="collapsed",
-        help="Set the monthly Azure spend budget. Used for variance and year-end forecast calculations.",
+        "Monthly budget ($)", min_value=0, value=480_000, step=10_000,
+        format="%d", label_visibility="collapsed",
     )
     st.markdown(
         f"<div style='color:rgba(255,255,255,0.4);font-size:0.65rem;margin-top:4px;'>"
@@ -437,43 +349,37 @@ with st.sidebar:
     )
     st.markdown("<hr style='border-color:rgba(255,255,255,0.1);margin:14px 0'>", unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  LOAD DATA
-# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Load data ──────────────────────────────────────────────────────────────────
 token = get_token()
 today = datetime.now()
 
-with st.spinner("Loading Azure spend data from MedInsight Azure Spend Analysis…"):
-    hist_df, live_row, elapsed = fetch_all_months(token)
+with st.spinner("Loading Azure spend data from Azure_Spend__Forecast…"):
+    hist_df, live_row, elapsed = fetch_spend_data(token)
 
 if hist_df.empty and not live_row:
     st.warning(
         "No data returned from the Semantic Model.\n\n"
         "Workspace: **MI - Azure Cost Analysis and FinOps Dashboard**\n\n"
-        "Dataset: **MedInsight Azure Spend Analysis**"
+        "Dataset: **Azure_Spend__Forecast**"
     )
     st.stop()
 
-rows, meta = build_forecast(hist_df, live_row, today, float(monthly_budget_input))
-yef        = year_end_forecast(rows)
-acc_avg    = avg_accuracy(rows)
-
-generated  = today.strftime("%Y-%m-%d %H:%M")
-user_email = st.session_state.get("user_email", "anmol.sharma@milliman.com")
-
+rows, meta    = build_forecast(hist_df, live_row, today, float(monthly_budget_input))
+yef           = year_end_forecast(rows)
+acc_avg       = avg_accuracy(rows)
+generated     = today.strftime("%Y-%m-%d %H:%M")
+user_email    = st.session_state.get("user_email", "anmol.sharma@milliman.com")
 completed_months = sum(1 for r in rows if r["type"] == "actual")
 forecast_months  = sum(1 for r in rows if r["type"] == "forecast")
 annual_budget    = meta["annual_budget"]
 yef_over         = yef > annual_budget
 over_under       = yef - annual_budget
 budget_vs_yef    = round(yef / annual_budget * 100, 1) if annual_budget > 0 else 0
+max_date_str     = live_row.get("maxdate", "—")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  BANNER
-# ══════════════════════════════════════════════════════════════════════════════
-max_date_str = str(live_row.get("maxdate", "—"))[:10]
-
+# ── Banner ─────────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div class="top-banner">
   <div class="dash-title">Azure Spend <span>12-Month Forecast</span></div>
@@ -482,40 +388,40 @@ st.markdown(f"""
     <span class="m">{user_email}</span>
     <span class="m">Generated: {generated}</span>
     <span class="m">Rolling avg (last 3 mo): ${meta['rolling_avg']/1000:.1f}K/mo</span>
-    <span class="m">Current burn: ${meta['current_burn']/1000:.2f}K/day &nbsp;·&nbsp; {meta['days_remaining']}d left</span>
-    <span class="m">Data as of: {max_date_str} &nbsp;·&nbsp; Query: {elapsed}s</span>
+    <span class="m">Daily burn: ${meta['current_burn']/1000:.2f}K/day · {meta['days_remaining']}d remaining</span>
+    <span class="m">Data as of: {max_date_str} · Query: {elapsed}s</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-# Data-source transparency strip
 st.markdown(f"""
 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;
             font-size:11px;color:#475569;display:flex;gap:20px;flex-wrap:wrap;margin-bottom:16px;">
-  <span>📊 <b>Actuals</b> <span class="source-tag grn">SUM(Cost) · Complete_Month≠"Incomplete"</span>
-        &nbsp;{len(hist_df)} completed months</span>
-  <span>💰 <b>Current MTD</b> <span class="source-tag">SUM(Cost) · Complete_Month="Incomplete"</span>
-        &nbsp;${meta['current_actual']/1000:.1f}K</span>
-  <span>🔥 <b>Daily burn</b> <span class="source-tag ora">MTD ÷ days elapsed</span>
-        &nbsp;${meta['current_burn']/1000:.2f}K/day</span>
+  <span>📊 <b>Actuals</b>
+    <span class="source-tag grn">Azure_spend_Analysis · SUM(total_cost) · complete_month ≠ Incomplete</span>
+    &nbsp;{len(hist_df)} completed months</span>
+  <span>💰 <b>Current MTD</b>
+    <span class="source-tag">complete_month = Incomplete</span>
+    &nbsp;${meta['current_actual']/1000:.1f}K ({meta['days_with_data']} days)</span>
+  <span>🔥 <b>Daily burn</b>
+    <span class="source-tag" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa;">MTD ÷ days elapsed</span>
+    &nbsp;${meta['current_burn']/1000:.2f}K/day</span>
 </div>
 """, unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  KPI CARDS
-# ══════════════════════════════════════════════════════════════════════════════
+# ── KPI cards ──────────────────────────────────────────────────────────────────
 k1, k2, k3, k4, k5 = st.columns(5)
 
 def acc_color(a):
-    if a is None: return "tel"
+    if a is None: return "blu"
     return "grn" if a >= 90 else "ora" if a >= 75 else "red"
 
 with k1:
     st.markdown(f"""<div class="kpi-card">
         <div class="kpi-lbl">Annual Budget ({today.year})</div>
         <div class="kpi-val blu">${annual_budget/1000:.0f}K</div>
-        <div class="kpi-sub">${meta['monthly_budget']/1000:.1f}K/month avg</div>
+        <div class="kpi-sub">${meta['monthly_budget']/1000:.1f}K/month</div>
     </div>""", unsafe_allow_html=True)
 
 with k2:
@@ -534,11 +440,11 @@ with k3:
     </div>""", unsafe_allow_html=True)
 
 with k4:
-    rest = meta["projected_eom"] - meta["current_actual"]
+    rest = max(meta["projected_eom"] - meta["current_actual"], 0)
     st.markdown(f"""<div class="kpi-card ora">
-        <div class="kpi-lbl">Current Month Forecast</div>
+        <div class="kpi-lbl">Current Month EOM</div>
         <div class="kpi-val ora">${meta['projected_eom']/1000:.1f}K</div>
-        <div class="kpi-sub">${meta['current_actual']/1000:.1f}K actual&nbsp;+&nbsp;${max(rest,0)/1000:.1f}K projected</div>
+        <div class="kpi-sub">${meta['current_actual']/1000:.1f}K MTD + ${rest/1000:.1f}K projected</div>
     </div>""", unsafe_allow_html=True)
 
 with k5:
@@ -553,18 +459,15 @@ with k5:
 st.markdown("---")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  CHART 1 – 12-Month spend bar + confidence band + budget line
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Chart 1 — 12-month spend bar + confidence band + budget line ───────────────
 st.markdown("<div class='section-label'>📈 12-Month Spend vs Forecast vs Budget</div>", unsafe_allow_html=True)
 
-labels = [r["label"] for r in rows]
+labels   = [r["label"] for r in rows]
+fc_rows  = [r for r in rows if r["type"] == "forecast"]
+fc_labels= [r["label"] for r in fc_rows]
 
 fig = go.Figure()
 
-# Confidence band (future months only) – fill between upper and lower
-fc_rows   = [r for r in rows if r["type"] == "forecast"]
-fc_labels = [r["label"] for r in fc_rows]
 if fc_rows:
     fig.add_trace(go.Scatter(
         x=fc_labels + fc_labels[::-1],
@@ -574,7 +477,6 @@ if fc_rows:
         showlegend=True, name="Confidence Band (±15–35%)",
     ))
 
-# Budget line
 fig.add_trace(go.Scatter(
     x=labels, y=[r["budget"]/1000 for r in rows],
     mode="lines", name="Monthly Budget",
@@ -582,42 +484,30 @@ fig.add_trace(go.Scatter(
     hovertemplate="%{x}<br>Budget: $%{y:.1f}K<extra></extra>",
 ))
 
-# Completed months — actual bars
 act_x = [r["label"] for r in rows if r["type"] == "actual" and r["actual"] is not None]
 act_y = [r["actual"]/1000 for r in rows if r["type"] == "actual" and r["actual"] is not None]
 if act_x:
-    fig.add_trace(go.Bar(
-        x=act_x, y=act_y, name="Actual Spend",
-        marker_color="#2563eb", opacity=0.88, borderradius=3,
-        hovertemplate="%{x}<br>Actual: $%{y:.1f}K<extra></extra>",
-    ))
+    fig.add_trace(go.Bar(x=act_x, y=act_y, name="Actual Spend",
+        marker_color="#2563eb", opacity=0.88,
+        hovertemplate="%{x}<br>Actual: $%{y:.1f}K<extra></extra>"))
 
-# Current month — stacked actual (solid) + projected rest (pale)
 curr_row = next((r for r in rows if r["type"] == "current"), None)
 if curr_row:
     fig.add_trace(go.Bar(
         x=[curr_row["label"]], y=[curr_row["actual"]/1000],
-        name="Current Month (MTD — portal)",
-        marker_color="#60a5fa", opacity=0.9,
-        hovertemplate="%{x}<br>MTD Actual (portal): $%{y:.1f}K<extra></extra>",
-    ))
+        name="Current Month (MTD)", marker_color="#60a5fa", opacity=0.9,
+        hovertemplate="%{x}<br>MTD: $%{y:.1f}K<extra></extra>"))
     rest_k = (curr_row["forecast"] - curr_row["actual"]) / 1000
     if rest_k > 0:
         fig.add_trace(go.Bar(
             x=[curr_row["label"]], y=[rest_k],
-            name="Projected (rest of month)",
-            marker_color="#bfdbfe", opacity=0.85,
-            hovertemplate="%{x}<br>Projected remaining: $%{y:.1f}K<extra></extra>",
-        ))
+            name="Projected (rest of month)", marker_color="#bfdbfe", opacity=0.85,
+            hovertemplate="%{x}<br>Projected remaining: $%{y:.1f}K<extra></extra>"))
 
-# Forecast months
 if fc_labels:
-    fig.add_trace(go.Bar(
-        x=fc_labels, y=[r["forecast"]/1000 for r in fc_rows],
-        name="Forecasted Spend",
-        marker_color="#a5b4fc", opacity=0.65,
-        hovertemplate="%{x}<br>Forecast: $%{y:.1f}K<extra></extra>",
-    ))
+    fig.add_trace(go.Bar(x=fc_labels, y=[r["forecast"]/1000 for r in fc_rows],
+        name="Forecasted Spend", marker_color="#a5b4fc", opacity=0.65,
+        hovertemplate="%{x}<br>Forecast: $%{y:.1f}K<extra></extra>"))
 
 fig.update_layout(
     barmode="stack", plot_bgcolor="#fff", paper_bgcolor="#fff", height=380,
@@ -631,56 +521,38 @@ fig.update_layout(
 st.plotly_chart(fig, use_container_width=True)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  CHART 2 – Daily burn rate trend + cumulative spend vs budget
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Chart 2 — Daily burn + cumulative spend ────────────────────────────────────
 st.markdown("<div class='section-label'>🔥 Burn Rate Trend &amp; Cumulative Spend vs Budget</div>", unsafe_allow_html=True)
 
 fig2 = make_subplots(specs=[[{"secondary_y": True}]])
 
-# Derive daily burn from actuals; use live figure for current month
 burn_x, burn_y = [], []
 for r in rows:
     if r["type"] == "actual" and r["actual"] is not None and r["days_in_month"]:
-        burn_x.append(r["label"])
-        burn_y.append(r["actual"] / r["days_in_month"] / 1000)
+        burn_x.append(r["label"]); burn_y.append(r["actual"] / r["days_in_month"] / 1000)
     elif r["type"] == "current":
-        burn_x.append(r["label"])
-        burn_y.append(meta["current_burn"] / 1000)
+        burn_x.append(r["label"]); burn_y.append(meta["current_burn"] / 1000)
 
 if burn_x:
-    fig2.add_trace(go.Scatter(
-        x=burn_x, y=burn_y, mode="lines+markers",
-        name="Daily Burn Rate ($K/day)",
-        line=dict(color="#ea580c", width=2.5),
-        marker=dict(size=6, color="#ea580c"),
-        hovertemplate="%{x}<br>Burn: $%{y:.2f}K/day<extra></extra>",
-    ), secondary_y=False)
+    fig2.add_trace(go.Scatter(x=burn_x, y=burn_y, mode="lines+markers",
+        name="Daily Burn Rate ($K/day)", line=dict(color="#ea580c", width=2.5),
+        marker=dict(size=6), hovertemplate="%{x}<br>Burn: $%{y:.2f}K/day<extra></extra>"),
+        secondary_y=False)
 
-# Cumulative spend (actuals + forecasts)
 running = 0.0
 cum_x, cum_y = [], []
 for r in rows:
     val = r["actual"] if r["type"] == "actual" and r["actual"] is not None else (r["forecast"] or 0)
-    running += val
-    cum_x.append(r["label"])
-    cum_y.append(running / 1000)
+    running += val; cum_x.append(r["label"]); cum_y.append(running / 1000)
 
-fig2.add_trace(go.Scatter(
-    x=cum_x, y=cum_y, mode="lines",
-    name="Cumulative Spend (actual + forecast)",
-    line=dict(color="#7c3aed", width=1.8, dash="dash"),
-    hovertemplate="%{x}<br>Cumulative: $%{y:.0f}K<extra></extra>",
-), secondary_y=True)
+fig2.add_trace(go.Scatter(x=cum_x, y=cum_y, mode="lines",
+    name="Cumulative Spend", line=dict(color="#7c3aed", width=1.8, dash="dash"),
+    hovertemplate="%{x}<br>Cumulative: $%{y:.0f}K<extra></extra>"), secondary_y=True)
 
-# Cumulative budget reference
-cum_bgt = [(i + 1) * meta["monthly_budget"] / 1000 for i in range(12)]
-fig2.add_trace(go.Scatter(
-    x=labels, y=cum_bgt, mode="lines",
-    name="Annual Budget (cumulative pace)",
-    line=dict(color="#94a3b8", width=1.5, dash="dot"),
-    hovertemplate="%{x}<br>Budget pace: $%{y:.0f}K<extra></extra>",
-), secondary_y=True)
+cum_bgt = [(i+1) * meta["monthly_budget"] / 1000 for i in range(12)]
+fig2.add_trace(go.Scatter(x=labels, y=cum_bgt, mode="lines",
+    name="Budget Pace", line=dict(color="#94a3b8", width=1.5, dash="dot"),
+    hovertemplate="%{x}<br>Budget pace: $%{y:.0f}K<extra></extra>"), secondary_y=True)
 
 fig2.update_layout(
     plot_bgcolor="#fff", paper_bgcolor="#fff", height=300,
@@ -690,32 +562,25 @@ fig2.update_layout(
     hovermode="x unified", font=dict(family="Inter, system-ui, sans-serif"),
 )
 fig2.update_yaxes(title_text="Daily Burn ($K/day)", showgrid=True, gridcolor="#f1f5f9",
-                   ticksuffix="K", tickfont=dict(size=11), secondary_y=False)
+                  ticksuffix="K", tickfont=dict(size=11), secondary_y=False)
 fig2.update_yaxes(title_text="Cumulative ($K)", ticksuffix="K",
-                   tickfont=dict(size=11), secondary_y=True)
+                  tickfont=dict(size=11), secondary_y=True)
 st.plotly_chart(fig2, use_container_width=True)
 
 st.markdown("---")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  CHART 3 – Forecast accuracy (completed months only)
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Chart 3 — Forecast accuracy ────────────────────────────────────────────────
 st.markdown("<div class='section-label'>🎯 Forecast Accuracy by Month</div>", unsafe_allow_html=True)
 
 acc_rows = [r for r in rows if r.get("accuracy") is not None]
 if not acc_rows:
-    st.info(
-        "Forecast accuracy will populate once 2+ completed months of actuals are available "
-        "in Azure_Expense_Details. Currently showing 0 completed months with prior-month data."
-    )
+    st.info("Forecast accuracy will populate once 2+ completed months of actuals are available.")
 else:
-    acc_labels = [r["label"]    for r in acc_rows]
     acc_vals   = [r["accuracy"] for r in acc_rows]
     acc_colors = ["#16a34a" if a >= 90 else "#ea580c" if a >= 75 else "#dc2626" for a in acc_vals]
-
     fig3 = go.Figure(go.Bar(
-        x=acc_labels, y=acc_vals,
+        x=[r["label"] for r in acc_rows], y=acc_vals,
         marker_color=acc_colors,
         text=[f"{a:.1f}%" for a in acc_vals], textposition="outside",
         hovertemplate="%{x}<br>Accuracy: %{y:.1f}%<extra></extra>",
@@ -732,48 +597,27 @@ else:
     )
     st.plotly_chart(fig3, use_container_width=True)
 
-    good = sum(1 for a in acc_vals if a >= 90)
-    ok   = sum(1 for a in acc_vals if 75 <= a < 90)
-    poor = sum(1 for a in acc_vals if a < 75)
-    st.markdown(f"""
-<div class="pill-row">
-  <span class="acc-badge acc-good">✓ {good} months ≥90%</span>
-  <span class="acc-badge acc-ok">~ {ok} months 75–89%</span>
-  <span class="acc-badge acc-poor">✗ {poor} months &lt;75%</span>
-  {'<span class="acc-badge acc-good">Overall: ' + str(acc_avg) + '%</span>' if acc_avg else ''}
-</div>
-""", unsafe_allow_html=True)
-
 st.markdown("---")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  DETAIL TABLE
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Detail table ───────────────────────────────────────────────────────────────
 st.markdown("<div class='section-label'>📋 12-Month Detail Table</div>", unsafe_allow_html=True)
 
 def type_badge(t):
-    cls   = {"actual": "mtype-actual", "current": "mtype-current", "forecast": "mtype-forecast"}[t]
-    label = {"actual": "Actual",       "current": "In Progress",   "forecast": "Forecast"}[t]
+    cls   = {"actual":"mtype-actual","current":"mtype-current","forecast":"mtype-forecast"}[t]
+    label = {"actual":"Actual","current":"In Progress","forecast":"Forecast"}[t]
     return f"<span class='{cls}'>{label}</span>"
 
 def variance_html(fc, bgt):
     if fc is None or not bgt: return "<span style='color:#94a3b8'>—</span>"
-    v   = fc - bgt
-    pct = round(v / bgt * 100, 1)
+    v = fc - bgt; pct = round(v / bgt * 100, 1)
     if v > 0: return f"<span style='color:#dc2626;font-weight:600'>+${v/1000:.1f}K ({pct}%)</span>"
     return f"<span style='color:#16a34a;font-weight:600'>{pct}% (${abs(v)/1000:.1f}K under)</span>"
 
-def acc_badge(a):
+def acc_badge_html(a):
     if a is None: return ""
     cls = "acc-good" if a >= 90 else "acc-ok" if a >= 75 else "acc-poor"
     return f"<span class='acc-badge {cls}'>{a:.1f}%</span>"
-
-def band_cell(r):
-    if r["type"] == "actual": return "—"
-    lo, hi = r.get("lower"), r.get("upper")
-    if lo is None: return "—"
-    return f"${lo/1000:.1f}K – ${hi/1000:.1f}K"
 
 rows_html = []
 for r in rows:
@@ -784,91 +628,69 @@ for r in rows:
 
     actual_d   = f"${r['actual']/1000:.1f}K"   if r["actual"]   is not None else "<span style='color:#94a3b8'>—</span>"
     forecast_d = f"${r['forecast']/1000:.1f}K"  if r["forecast"] is not None else "<span style='color:#94a3b8'>—</span>"
+    lo, hi     = r.get("lower"), r.get("upper")
+    band_d     = f"${lo/1000:.1f}K–${hi/1000:.1f}K" if lo is not None and r["type"] != "actual" else "—"
     burn_d     = f"${r['burn_day']*1000:.0f}/day" if r["burn_day"] else "—"
 
     rows_html.append(f"""<tr class='{row_css}'>
-  <td><b>{r['label']}</b></td>
-  <td>{type_badge(r['type'])}</td>
-  <td class='num'>{actual_d}</td>
-  <td class='num'>{forecast_d}</td>
+  <td><b>{r['label']}</b></td><td>{type_badge(r['type'])}</td>
+  <td class='num'>{actual_d}</td><td class='num'>{forecast_d}</td>
   <td class='num'>${r['budget']/1000:.1f}K</td>
   <td class='num'>{variance_html(r['forecast'], r['budget'])}</td>
-  <td class='num' style='font-size:10px;color:#64748b'>{band_cell(r)}</td>
+  <td class='num' style='font-size:10px;color:#64748b'>{band_d}</td>
   <td class='num'>{burn_d}</td>
-  <td class='num'>{acc_badge(r.get('accuracy'))}</td>
+  <td class='num'>{acc_badge_html(r.get('accuracy'))}</td>
 </tr>""")
 
 st.markdown(f"""
-<div class="fg-wrap">
-<table class="fg">
+<div class="fg-wrap"><table class="fg">
 <thead><tr>
   <th>Month</th><th>Type</th>
-  <th class="num">Actual Spend</th>
-  <th class="num">Forecast / EOM</th>
-  <th class="num">Monthly Budget</th>
-  <th class="num">Forecast vs Budget</th>
-  <th class="num">Confidence Band</th>
-  <th class="num">Avg Daily Burn</th>
+  <th class="num">Actual Spend</th><th class="num">Forecast / EOM</th>
+  <th class="num">Monthly Budget</th><th class="num">Forecast vs Budget</th>
+  <th class="num">Confidence Band</th><th class="num">Avg Daily Burn</th>
   <th class="num">Forecast Accuracy</th>
 </tr></thead>
 <tbody>{"".join(rows_html)}</tbody>
-</table>
-</div>
+</table></div>
 """, unsafe_allow_html=True)
 
 st.markdown("---")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  YEAR-END SUMMARY
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Year-end summary ───────────────────────────────────────────────────────────
 st.markdown("<div class='section-label'>📊 Year-End Summary</div>", unsafe_allow_html=True)
 
 col_chart, col_stats = st.columns([3, 2])
 
 with col_chart:
-    # Waterfall: each month as an incremental bar, final "total" bar
-    wf_labels = [r["label"] for r in rows] + ["Year-End Total"]
-    wf_vals   = [
-        (r["actual"] if r["type"] == "actual" and r["actual"] is not None else r["forecast"] or 0)
-        for r in rows
-    ]
+    wf_labels  = [r["label"] for r in rows] + ["Year-End Total"]
+    wf_vals    = [(r["actual"] if r["type"]=="actual" and r["actual"] is not None else r["forecast"] or 0) for r in rows]
     wf_measure = ["relative"] * 12 + ["total"]
-    wf_colors  = [
-        "#2563eb" if r["type"] == "actual"
-        else "#60a5fa" if r["type"] == "current"
-        else "#a5b4fc"
-        for r in rows
-    ] + ["#7c3aed"]
+    wf_colors  = ["#2563eb" if r["type"]=="actual" else "#60a5fa" if r["type"]=="current" else "#a5b4fc" for r in rows] + ["#7c3aed"]
 
     fig4 = go.Figure(go.Waterfall(
-        orientation="v",
-        measure=wf_measure,
-        x=wf_labels,
-        y=wf_vals + [0],
+        orientation="v", measure=wf_measure, x=wf_labels, y=wf_vals + [0],
         connector=dict(line=dict(color="#e2e8f0", width=1)),
-        decreasing=dict(marker=dict(color="#16a34a")),
         increasing=dict(marker=dict(color="#2563eb")),
         totals=dict(marker=dict(color="#7c3aed")),
         hovertemplate="%{x}<br>$%{y:,.0f}<extra></extra>",
     ))
-    fig4.add_hline(
-        y=annual_budget, line_dash="dot", line_color="#dc2626",
-        annotation_text=f"Annual Budget ${annual_budget/1000:.0f}K",
-        annotation_position="bottom right",
-    )
+    fig4.add_hline(y=annual_budget, line_dash="dot", line_color="#dc2626",
+                   annotation_text=f"Annual Budget ${annual_budget/1000:.0f}K",
+                   annotation_position="bottom right")
     fig4.update_layout(
         plot_bgcolor="#fff", paper_bgcolor="#fff", height=340,
         margin=dict(t=30, b=40, l=60, r=20),
         yaxis=dict(showgrid=True, gridcolor="#f1f5f9", tickfont=dict(size=10)),
-        xaxis=dict(tickfont=dict(size=9)),
-        showlegend=False, font=dict(family="Inter, system-ui, sans-serif"),
+        xaxis=dict(tickfont=dict(size=9)), showlegend=False,
+        font=dict(family="Inter, system-ui, sans-serif"),
         title=dict(text="Month-by-Month Build-up to Year-End", font=dict(size=12, color="#1e293b")),
     )
     st.plotly_chart(fig4, use_container_width=True)
 
 with col_stats:
-    pace_note = "On Track" if abs(over_under) / annual_budget < 0.05 else ("Over Pace" if yef_over else "Under Pace")
+    pace_note   = "On Track" if abs(over_under)/annual_budget < 0.05 else ("Over Pace" if yef_over else "Under Pace")
     pct_yr_done = round(completed_months / 12 * 100, 0)
 
     st.markdown(f"""
@@ -878,7 +700,7 @@ with col_stats:
     <tr><td style="color:#64748b;padding:5px 0">Annual Budget</td>
         <td style="text-align:right;font-weight:600">${annual_budget/1000:.0f}K</td></tr>
     <tr style="border-top:1px solid #f1f5f9">
-        <td style="color:#64748b;padding:5px 0">YE Forecast (dynamic)</td>
+        <td style="color:#64748b;padding:5px 0">YE Forecast</td>
         <td style="text-align:right;font-weight:700;color:{'#dc2626' if yef_over else '#16a34a'}">${yef/1000:.0f}K</td></tr>
     <tr style="border-top:1px solid #f1f5f9">
         <td style="color:#64748b;padding:5px 0">Budget Variance</td>
@@ -888,14 +710,11 @@ with col_stats:
         <td style="color:#64748b;padding:5px 0">Run-Rate (rolling avg × 12)</td>
         <td style="text-align:right;font-weight:600">${meta['rolling_avg']*12/1000:.0f}K</td></tr>
     <tr style="border-top:1px solid #f1f5f9">
-        <td style="color:#64748b;padding:5px 0">Current Daily Burn</td>
+        <td style="color:#64748b;padding:5px 0">Daily Burn Rate</td>
         <td style="text-align:right;font-weight:600">${meta['current_burn']/1000:.2f}K/day</td></tr>
     <tr style="border-top:1px solid #f1f5f9">
         <td style="color:#64748b;padding:5px 0">Months Completed</td>
         <td style="text-align:right;font-weight:600">{completed_months} of 12 ({int(pct_yr_done)}%)</td></tr>
-    <tr style="border-top:1px solid #f1f5f9">
-        <td style="color:#64748b;padding:5px 0">Months Remaining</td>
-        <td style="text-align:right;font-weight:600">{forecast_months}</td></tr>
     <tr style="border-top:1px solid #f1f5f9">
         <td style="color:#64748b;padding:5px 0">Forecast Accuracy (avg)</td>
         <td style="text-align:right;font-weight:600;color:{'#16a34a' if acc_avg and acc_avg>=90 else '#ea580c' if acc_avg and acc_avg>=75 else '#94a3b8'}">
@@ -904,111 +723,25 @@ with col_stats:
         <td style="color:#64748b;padding:5px 0">Pace</td>
         <td style="text-align:right;font-weight:600">{pace_note}</td></tr>
   </table>
-</div>
-""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
 
     st.markdown("""
 <div class="method-box" style="margin-top:12px;">
-  <b>Data sourcing — MedInsight Azure Spend Analysis</b><br>
-  <b>Actuals</b> — <code>SUM(Azure_Expense_Details[Cost])</code> · Complete_Month ≠ "Incomplete"<br>
-  <b>Current month MTD</b> — SUM(Cost) where Complete_Month = "Incomplete"<br>
-  <b>Daily burn</b> — MTD ÷ days elapsed in current month<br>
-  <b>EOM projection</b> — MTD + daily burn × days remaining in month<br>
-  <b>Future forecast</b> — 70% rolling 3-month avg + 30% burn × days in month<br>
-  <b>Confidence band</b> — ±15% base, +2%/month out<br>
-  <b>Budget</b> — entered manually via sidebar (no budget table in this model)
-</div>
-""", unsafe_allow_html=True)
+  <b>Data source — Azure_Spend__Forecast</b><br>
+  <b>Table:</b> Azure_spend_Analysis · 6 columns · pre-aggregated in Fabric<br>
+  <b>Actuals:</b> SUM(total_cost) · complete_month ≠ "Incomplete"<br>
+  <b>Current MTD:</b> total_cost where complete_month = "Incomplete"<br>
+  <b>Daily burn:</b> MTD ÷ days_with_data<br>
+  <b>EOM projection:</b> MTD + burn × days remaining<br>
+  <b>Forecast:</b> 70% rolling 3-month avg + 30% burn × days in month<br>
+  <b>Confidence band:</b> ±15% base, +2%/month out
+</div>""", unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  EXPORT HTML  — injects real computed numbers into a self-contained HTML file
-# ══════════════════════════════════════════════════════════════════════════════
-st.markdown("---")
-st.markdown("<div class='section-label'>📥 Export</div>", unsafe_allow_html=True)
-
-# Build JSON payload for the HTML template
-export_payload = {
-    "generated":      generated,
-    "tenantName":     TENANT_NAME,
-    "userEmail":      user_email,
-    "annualBudget":   round(annual_budget, 2),
-    "monthlyBudget":  round(meta["monthly_budget"], 2),
-    "yef":            round(yef, 2),
-    "overUnder":      round(over_under, 2),
-    "projectedEOM":   round(meta["projected_eom"], 2),
-    "currentActual":  round(meta["current_actual"], 2),
-    "currentBurn":    round(meta["current_burn"], 2),
-    "daysRemaining":  meta["days_remaining"],
-    "rollingAvg":     round(meta["rolling_avg"], 2),
-    "accAvg":         acc_avg,
-    "completedMonths": completed_months,
-    "forecastMonths":  forecast_months,
-    "rows": [
-        {
-            "label":      r["label"],
-            "type":       r["type"],
-            "actual":     round(r["actual"],   2) if r["actual"]   is not None else None,
-            "forecast":   round(r["forecast"], 2) if r["forecast"] is not None else None,
-            "budget":     round(r["budget"],   2),
-            "lower":      round(r["lower"],    2) if r["lower"]    is not None else None,
-            "upper":      round(r["upper"],    2) if r["upper"]    is not None else None,
-            "burn_day":   round(r["burn_day"], 4) if r["burn_day"] is not None else None,
-            "accuracy":   r.get("accuracy"),
-        }
-        for r in rows
-    ],
-}
-
-# Read the HTML template and inject the data
-try:
-    import os
-    template_path = os.path.join(os.path.dirname(__file__), "..", "forecast_dashboard.html")
-    with open(template_path, "r", encoding="utf-8") as f:
-        html_template = f.read()
-
-    # Replace the static DATA block with real numbers
-    json_str = json.dumps(export_payload, ensure_ascii=False)
-    html_out = html_template.replace(
-        "// @@INJECT_DATA@@",
-        f"const EXPORT = {json_str};\n"
-        "const MONTHS = EXPORT.rows.map(r => r.label);\n"
-        "const BUDGET_MO = EXPORT.monthlyBudget / 1000;\n"
-        "const DATA = EXPORT.rows.map(r => ({...r, "
-        "actual: r.actual ? r.actual/1000 : null, "
-        "forecast: r.forecast ? r.forecast/1000 : null, "
-        "budget: r.budget/1000, "
-        "lower: r.lower ? r.lower/1000 : null, "
-        "upper: r.upper ? r.upper/1000 : null, "
-        "burn: r.burn_day ? r.burn_day : null }));\n",
-    )
-
-    exp_col, _ = st.columns([2, 8])
-    with exp_col:
-        st.download_button(
-            "⬇ Export as HTML (live data)",
-            html_out.encode("utf-8"),
-            file_name=f"Azure_Forecast_{today.strftime('%Y%m%d')}.html",
-            mime="text/html",
-            key="dl_html",
-        )
-except Exception as exc:
-    st.info(f"HTML export unavailable: {exc}")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  FOOTER
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Footer ─────────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div class="dash-footer">
-  <span>
-    {completed_months} months actual (Azure_Expense_Details) &nbsp;·&nbsp;
-    {forecast_months} months forecast &nbsp;·&nbsp;
-    accuracy {str(acc_avg)+'%' if acc_avg else 'N/A'}
-  </span>
-  <span>
-    Power BI REST API &nbsp;·&nbsp; Dataset: {DATASET_ID[:8]}...
-    &nbsp;·&nbsp; Cache: 5 min &nbsp;·&nbsp; Auto-refresh: 5 min
-  </span>
+  <span>{completed_months} months actual · {forecast_months} months forecast · accuracy {str(acc_avg)+'%' if acc_avg else 'N/A'}</span>
+  <span>Azure_Spend__Forecast · Dataset: {DATASET_ID[:8]}... · Cache: 5 min · Auto-refresh: 5 min</span>
 </div>
 """, unsafe_allow_html=True)
