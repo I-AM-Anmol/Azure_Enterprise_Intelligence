@@ -1,5 +1,8 @@
-import truststore
-truststore.inject_into_ssl()  # use Windows cert store — bypasses corporate proxy SSL issue
+try:
+    import truststore
+    truststore.inject_into_ssl()  # Windows cert store — fixes corporate proxy SSL
+except ImportError:
+    pass  # not needed on Linux/cloud environments
 
 import streamlit as st
 import requests
