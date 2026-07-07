@@ -1,3 +1,6 @@
+import truststore
+truststore.inject_into_ssl()  # use Windows cert store — bypasses corporate proxy SSL issue
+
 import streamlit as st
 import requests
 import pandas as pd
@@ -7,7 +10,7 @@ import json
 import time
 from datetime import datetime
 from calendar import monthrange
-from azure.identity import AzureCliCredential, ClientSecretCredential
+from azure.identity import AzureCliCredential
 from streamlit_autorefresh import st_autorefresh
 
 # ── Configuration ──────────────────────────────────────────────────────────────
@@ -116,13 +119,36 @@ table.fg tr:hover td     { background:#f8fafc; }
 
 
 # ── Auth ───────────────────────────────────────────────────────────────────────
+def _sp_token_via_msal(tenant_id, client_id, client_secret):
+    """Get SP token via MSAL with a shared requests session (Windows cert store already injected)."""
+    import msal
+    session = requests.Session()
+    app = msal.ConfidentialClientApplication(
+        client_id,
+        authority=f"https://login.microsoftonline.com/{tenant_id}",
+        client_credential=client_secret,
+        http_client=session,
+    )
+    result = app.acquire_token_for_client(
+        scopes=["https://analysis.windows.net/powerbi/api/.default"]
+    )
+    if "access_token" in result:
+        return result["access_token"]
+    raise RuntimeError(f"MSAL SP auth failed: {result.get('error_description', result)}")
+
+
 def get_token():
+    # Try Service Principal first (from secrets.toml)
     try:
         az = st.secrets["azure"]
-        cred = ClientSecretCredential(az["tenant_id"], az["client_id"], az["client_secret"])
-        return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
+        token = _sp_token_via_msal(az["tenant_id"], az["client_id"], az["client_secret"])
+        return token
     except (KeyError, FileNotFoundError):
-        pass
+        pass  # no secrets.toml — fall through to CLI
+    except Exception as sp_err:
+        st.warning(f"SP auth failed ({sp_err}) — falling back to az login")
+
+    # Fallback: az login session
     try:
         cred = AzureCliCredential(tenant_id=TENANT_ID)
         return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
