@@ -141,23 +141,35 @@ def _sp_token_via_msal(tenant_id, client_id, client_secret):
 
 
 def get_token():
-    # Try Service Principal first (from secrets.toml)
-    try:
-        az = st.secrets["azure"]
-        token = _sp_token_via_msal(az["tenant_id"], az["client_id"], az["client_secret"])
-        return token
-    except (KeyError, FileNotFoundError):
-        pass  # no secrets.toml — fall through to CLI
-    except Exception as sp_err:
-        st.warning(f"SP auth failed ({sp_err}) — falling back to az login")
-
-    # Fallback: az login session
+    # Try az login (user delegated token) first — works locally, bypasses SP tenant restriction
     try:
         cred = AzureCliCredential(tenant_id=TENANT_ID)
         return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
-    except Exception as e:
-        st.error(f"Auth failed. Run `az login --tenant {TENANT_ID}` locally.\n{e}")
+    except Exception:
+        pass  # no az login session — try SP next
+
+    # Fallback: Service Principal from secrets.toml
+    try:
+        az = st.secrets["azure"]
+        return _sp_token_via_msal(az["tenant_id"], az["client_id"], az["client_secret"])
+    except (KeyError, FileNotFoundError):
+        pass
+    except Exception as sp_err:
+        st.error(
+            f"**Auth failed.** SP error: `{sp_err}`\n\n"
+            "**For local use:** Run `az login --tenant e240d61e-61e3-4c9e-ab90-8644b2f4d2a9` in terminal, then refresh.\n\n"
+            "**For Streamlit Cloud (SP):** A Power BI admin must enable "
+            "**Allow service principals to use Power BI APIs** in the "
+            "[Power BI Admin Portal → Developer settings]"
+            "(https://app.powerbi.com/admin-portal/tenantSettings)."
+        )
         st.stop()
+
+    st.error(
+        "**Auth failed — no valid credential found.**\n\n"
+        "Run `az login --tenant e240d61e-61e3-4c9e-ab90-8644b2f4d2a9` in your terminal, then refresh."
+    )
+    st.stop()
 
 
 def strip_prefix(col):
