@@ -147,14 +147,16 @@ def get_token():
     # Try az login (user delegated token) first — works locally, bypasses SP tenant restriction
     try:
         cred = AzureCliCredential(tenant_id=TENANT_ID)
-        return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
+        token = cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
+        return token, "Azure CLI", TENANT_ID
     except Exception:
         pass  # no az login session — try SP next
 
     # Fallback: Service Principal from secrets.toml
     try:
         az = st.secrets["azure"]
-        return _sp_token_via_msal(az["tenant_id"], az["client_id"], az["client_secret"])
+        token = _sp_token_via_msal(az["tenant_id"], az["client_id"], az["client_secret"])
+        return token, "Service Principal", az["tenant_id"]
     except (KeyError, FileNotFoundError):
         pass
     except Exception as sp_err:
@@ -267,10 +269,10 @@ def fetch_spend_data(token, dataset_id):
         df = _pbi_query(token, _DAX, dataset_id)
     except Exception as exc:
         st.warning(f"Could not query Azure_spend_Analysis: {exc}")
-        return pd.DataFrame(), {}, round(time.time() - t0, 1)
+        return pd.DataFrame(), {}, round(time.time() - t0, 1), str(exc)
 
     if df.empty:
-        return pd.DataFrame(), {}, round(time.time() - t0, 1)
+        return pd.DataFrame(), {}, round(time.time() - t0, 1), None
 
     df.columns = [c.lower() for c in df.columns]
     df["total_cost"]                 = pd.to_numeric(df["total_cost"], errors="coerce").fillna(0)
@@ -301,7 +303,7 @@ def fetch_spend_data(token, dataset_id):
         live_row["days_with_data"]= 0
         live_row["maxdate"]       = str(df["max_date"].max())[:10]
 
-    return hist_df, live_row, round(time.time() - t0, 1)
+    return hist_df, live_row, round(time.time() - t0, 1), None
 
 
 # ── Forecast engine ────────────────────────────────────────────────────────────
@@ -470,7 +472,7 @@ with st.sidebar:
 
 
 # ── Load data ──────────────────────────────────────────────────────────────────
-token = get_token()
+token, auth_mode, auth_tenant = get_token()
 today = datetime.now()
 
 resolved_dataset_id = DATASET_ID
@@ -487,7 +489,18 @@ except Exception as exc:
     st.stop()
 
 with st.spinner(f"Loading Azure spend data from {resolved_dataset_name}…"):
-    hist_df, live_row, elapsed = fetch_spend_data(token, resolved_dataset_id)
+    hist_df, live_row, elapsed, query_error = fetch_spend_data(token, resolved_dataset_id)
+
+with st.sidebar:
+    with st.expander("Auth Diagnostics", expanded=False):
+        st.caption(f"Mode: {auth_mode}")
+        st.caption(f"Tenant: {auth_tenant}")
+        st.caption(f"Workspace: {WORKSPACE_NAME}")
+        st.caption(f"Model: {resolved_dataset_name}")
+        st.caption(f"Model ID: {resolved_dataset_id}")
+        st.caption(f"Query status: {'failed' if query_error else 'ok'}")
+        if query_error:
+            st.caption(f"Error: {query_error[:180]}")
 
 if hist_df.empty and not live_row:
     st.warning(
