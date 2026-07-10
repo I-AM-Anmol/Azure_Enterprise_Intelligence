@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
+import base64
 import time
 from datetime import datetime
 from calendar import monthrange
@@ -179,6 +180,20 @@ def get_token():
 
 def strip_prefix(col):
     return col.split("[")[-1].rstrip("]") if "[" in col else col
+
+
+def decode_token_claims(token):
+    """Decode JWT payload without signature validation for diagnostics only."""
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            return {}
+        payload = parts[1]
+        pad = "=" * (-len(payload) % 4)
+        raw = base64.urlsafe_b64decode(payload + pad)
+        return json.loads(raw.decode("utf-8", errors="ignore"))
+    except Exception:
+        return {}
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -473,6 +488,10 @@ with st.sidebar:
 
 # ── Load data ──────────────────────────────────────────────────────────────────
 token, auth_mode, auth_tenant = get_token()
+token_claims = decode_token_claims(token)
+token_app_id = token_claims.get("appid") or token_claims.get("azp") or "—"
+token_obj_id = token_claims.get("oid") or "—"
+token_upn = token_claims.get("upn") or token_claims.get("preferred_username") or "—"
 today = datetime.now()
 
 resolved_dataset_id = DATASET_ID
@@ -495,6 +514,9 @@ with st.sidebar:
     with st.expander("Auth Diagnostics", expanded=False):
         st.caption(f"Mode: {auth_mode}")
         st.caption(f"Tenant: {auth_tenant}")
+        st.caption(f"Token app id: {token_app_id}")
+        st.caption(f"Token object id: {token_obj_id}")
+        st.caption(f"Token principal: {token_upn}")
         st.caption(f"Workspace: {WORKSPACE_NAME}")
         st.caption(f"Model: {resolved_dataset_name}")
         st.caption(f"Model ID: {resolved_dataset_id}")
