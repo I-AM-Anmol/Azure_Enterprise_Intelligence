@@ -179,10 +179,46 @@ def strip_prefix(col):
     return col.split("[")[-1].rstrip("]") if "[" in col else col
 
 
-def _pbi_query(token, dax, timeout=60):
+@st.cache_data(ttl=900, show_spinner=False)
+def resolve_dataset(token):
+    """Resolve dataset ID in workspace, preferring semantic model name."""
+    url = f"https://api.powerbi.com/v1.0/myorg/groups/{WORKSPACE_ID}/datasets"
+    resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+
+    if resp.status_code == 401:
+        raise PermissionError(
+            "Power BI API 401 while listing datasets. "
+            "Your account/service principal is not authorized for this workspace."
+        )
+    if not resp.ok:
+        raise RuntimeError(f"Could not list datasets ({resp.status_code}): {resp.text[:500]}")
+
+    items = resp.json().get("value", [])
+    if not items:
+        raise RuntimeError("No semantic models found in the workspace.")
+
+    by_name = {d.get("name", "").strip().lower(): d for d in items if d.get("name")}
+    by_id = {d.get("id"): d for d in items if d.get("id")}
+
+    preferred = by_name.get(SEMANTIC_MODEL_NAME.strip().lower())
+    if preferred:
+        return preferred["id"], preferred.get("name", SEMANTIC_MODEL_NAME)
+
+    if DATASET_ID in by_id:
+        ds = by_id[DATASET_ID]
+        return ds["id"], ds.get("name", SEMANTIC_MODEL_NAME)
+
+    available = ", ".join(sorted(by_name.keys())[:10])
+    raise RuntimeError(
+        f"Semantic model '{SEMANTIC_MODEL_NAME}' not found in workspace '{WORKSPACE_NAME}'. "
+        f"Available models: {available if available else 'none'}"
+    )
+
+
+def _pbi_query(token, dax, dataset_id, timeout=60):
     url = (
         f"https://api.powerbi.com/v1.0/myorg/groups/{WORKSPACE_ID}"
-        f"/datasets/{DATASET_ID}/executeQueries"
+        f"/datasets/{dataset_id}/executeQueries"
     )
     resp = requests.post(
         url,
@@ -191,8 +227,11 @@ def _pbi_query(token, dax, timeout=60):
         timeout=timeout,
     )
     if resp.status_code == 401:
-        st.error(f"Power BI API 401 — {resp.text}")
-        st.stop()
+        raise PermissionError(
+            "Power BI API 401 for executeQueries. Ensure this identity has access to workspace "
+            f"'{WORKSPACE_NAME}' and Build permission on semantic model '{SEMANTIC_MODEL_NAME}'. "
+            f"Details: {resp.text[:500]}"
+        )
     if not resp.ok:
         raise RuntimeError(f"PBI API {resp.status_code}: {resp.text[:800]}")
     rows = resp.json()["results"][0]["tables"][0].get("rows", [])
@@ -222,10 +261,10 @@ ORDER BY 'Azure_spend_Analysis'[billing_period_start_date] ASC
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def fetch_spend_data(token):
+def fetch_spend_data(token, dataset_id):
     t0 = time.time()
     try:
-        df = _pbi_query(token, _DAX)
+        df = _pbi_query(token, _DAX, dataset_id)
     except Exception as exc:
         st.warning(f"Could not query Azure_spend_Analysis: {exc}")
         return pd.DataFrame(), {}, round(time.time() - t0, 1)
@@ -434,14 +473,27 @@ with st.sidebar:
 token = get_token()
 today = datetime.now()
 
-with st.spinner(f"Loading Azure spend data from {SEMANTIC_MODEL_NAME}…"):
-    hist_df, live_row, elapsed = fetch_spend_data(token)
+resolved_dataset_id = DATASET_ID
+resolved_dataset_name = SEMANTIC_MODEL_NAME
+try:
+    resolved_dataset_id, resolved_dataset_name = resolve_dataset(token)
+except Exception as exc:
+    st.error(
+        "Unable to resolve semantic model in Fabric workspace.\n\n"
+        f"Workspace: **{WORKSPACE_NAME}**\n\n"
+        f"Requested model: **{SEMANTIC_MODEL_NAME}**\n\n"
+        f"Error: `{exc}`"
+    )
+    st.stop()
+
+with st.spinner(f"Loading Azure spend data from {resolved_dataset_name}…"):
+    hist_df, live_row, elapsed = fetch_spend_data(token, resolved_dataset_id)
 
 if hist_df.empty and not live_row:
     st.warning(
         "No data returned from the Semantic Model.\n\n"
         f"Workspace: **{WORKSPACE_NAME}**\n\n"
-        f"Dataset: **{SEMANTIC_MODEL_NAME}**"
+        f"Dataset: **{resolved_dataset_name}**"
     )
     st.stop()
 
@@ -477,7 +529,7 @@ st.markdown(f"""
   <div class="dash-meta">
     <span class="m">{TENANT_NAME}</span>
         <span class="m">Workspace: {WORKSPACE_NAME}</span>
-        <span class="m">Semantic model: {SEMANTIC_MODEL_NAME}</span>
+        <span class="m">Semantic model: {resolved_dataset_name}</span>
     <span class="m">{user_email}</span>
     <span class="m">Generated: {generated}</span>
     <span class="m">Rolling avg (last 3 mo): ${meta['rolling_avg']/1000:.1f}K/mo</span>
@@ -820,7 +872,7 @@ with col_stats:
 
     st.markdown("""
 <div class="method-box" style="margin-top:12px;">
-        <b>Data source — Azure_Spend_Forecast</b><br>
+        <b>Data source — {resolved_dataset_name}</b><br>
   <b>Table:</b> Azure_spend_Analysis · 6 columns · pre-aggregated in Fabric<br>
   <b>Actuals:</b> SUM(total_cost) · complete_month ≠ "Incomplete"<br>
   <b>Current MTD:</b> total_cost where complete_month = "Incomplete"<br>
@@ -835,6 +887,6 @@ with col_stats:
 st.markdown(f"""
 <div class="dash-footer">
   <span>{completed_months} months actual · {forecast_months} months forecast · accuracy {str(acc_avg)+'%' if acc_avg else 'N/A'}</span>
-    <span>{SEMANTIC_MODEL_NAME} · Dataset: {DATASET_ID[:8]}... · Cache: 5 min · Auto-refresh: 5 min</span>
+    <span>{resolved_dataset_name} · Dataset: {resolved_dataset_id[:8]}... · Cache: 5 min · Auto-refresh: 5 min</span>
 </div>
 """, unsafe_allow_html=True)
