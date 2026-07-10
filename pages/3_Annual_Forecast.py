@@ -17,10 +17,13 @@ from azure.identity import AzureCliCredential
 from streamlit_autorefresh import st_autorefresh
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-TENANT_ID    = "e240d61e-61e3-4c9e-ab90-8644b2f4d2a9"
-WORKSPACE_ID = "eca3c81e-a968-42a5-899f-d8fc1a45ebec"
-DATASET_ID   = "10b45f31-71d5-463c-ac78-bce785b9fd8f"   # Azure_Spend__Forecast
-TENANT_NAME  = "MedInsight Production · Engineering · Milliman"
+TENANT_ID            = "e240d61e-61e3-4c9e-ab90-8644b2f4d2a9"
+WORKSPACE_ID         = "eca3c81e-a968-42a5-899f-d8fc1a45ebec"
+WORKSPACE_NAME       = "MI - Azure Cost Analysis and FinOps Dashboard"
+DATASET_ID           = "10b45f31-71d5-463c-ac78-bce785b9fd8f"
+SEMANTIC_MODEL_NAME  = "Azure_Spend_Forecast"
+FORECAST_YEAR        = 2026
+TENANT_NAME          = "MedInsight Production · Engineering · Milliman"
 
 st_autorefresh(interval=300000)
 
@@ -200,7 +203,7 @@ def _pbi_query(token, dax, timeout=60):
     return df
 
 
-# ── DAX — single flat query against Azure_Spend__Forecast model ───────────────
+# ── DAX — single flat query against Azure_Spend_Forecast model ────────────────
 # Table: Azure_spend_Analysis
 # Columns: billing_period_start_date, complete_month, total_cost,
 #          max_date, days_in_month, days_with_data
@@ -263,11 +266,24 @@ def fetch_spend_data(token):
 
 
 # ── Forecast engine ────────────────────────────────────────────────────────────
-def build_forecast(hist_df, live_row, today, monthly_budget):
-    curr_yr = today.year
-    curr_mo = today.month
+def build_forecast(
+    hist_df,
+    live_row,
+    today,
+    monthly_budget,
+    target_year,
+    rolling_weight,
+    burn_weight,
+    conf_base,
+    conf_step,
+    portal_current_mtd=None,
+):
+    curr_yr = target_year
+    curr_mo = today.month if target_year == today.year else 1
 
     current_actual   = float(live_row.get("currentmtd", 0) or 0)
+    if portal_current_mtd is not None and portal_current_mtd > 0:
+        current_actual = float(portal_current_mtd)
     days_in_curr_mo  = int(live_row.get("days_in_month", monthrange(curr_yr, curr_mo)[1]))
     days_with_data   = int(live_row.get("days_with_data", today.day))
     days_remaining   = days_in_curr_mo - days_with_data
@@ -293,7 +309,7 @@ def build_forecast(hist_df, live_row, today, monthly_budget):
         rolling_avg = monthly_budget
 
     def band(base, months_out):
-        spread = 0.15 + months_out * 0.02
+        spread = conf_base + months_out * conf_step
         return round(base * (1 - spread), 2), round(base * (1 + spread), 2)
 
     month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
@@ -311,7 +327,7 @@ def build_forecast(hist_df, live_row, today, monthly_budget):
             burn_day = (actual / dim) if actual else None
             accuracy = None
 
-        elif m == curr_mo:
+        elif m == curr_mo and target_year == today.year:
             actual   = current_actual
             row_type = "current"
             forecast = projected_eom
@@ -322,7 +338,7 @@ def build_forecast(hist_df, live_row, today, monthly_budget):
         else:
             months_out  = m - curr_mo
             burn_extrap = (current_burn * dim) if current_burn > 0 else rolling_avg
-            forecast    = round(0.70 * rolling_avg + 0.30 * burn_extrap, 2)
+            forecast    = round((rolling_weight * rolling_avg) + (burn_weight * burn_extrap), 2)
             actual      = None
             row_type    = "forecast"
             lo, hi      = band(forecast, months_out)
@@ -388,6 +404,29 @@ with st.sidebar:
         f"Annual: ${monthly_budget_input * 12 / 1_000_000:.2f}M</div>",
         unsafe_allow_html=True,
     )
+
+    st.markdown("<hr style='border-color:rgba(255,255,255,0.1);margin:14px 0'>", unsafe_allow_html=True)
+    st.markdown("<div style='color:#fff;font-size:0.8rem;font-weight:700;margin-bottom:6px;'>📐 Forecast Method</div>", unsafe_allow_html=True)
+    st.caption("Weighted rolling-average monthly forecast for remaining 2026 months.")
+    rolling_weight = st.slider("Rolling average weight", min_value=0.5, max_value=0.9, value=0.7, step=0.05)
+    burn_weight = round(1.0 - rolling_weight, 2)
+    st.caption(f"Burn-rate weight: {burn_weight:.2f}")
+    conf_base = st.slider("Confidence base spread", min_value=0.10, max_value=0.25, value=0.15, step=0.01)
+    conf_step = st.slider("Confidence monthly increment", min_value=0.01, max_value=0.05, value=0.02, step=0.01)
+
+    st.markdown("<hr style='border-color:rgba(255,255,255,0.1);margin:14px 0'>", unsafe_allow_html=True)
+    st.markdown("<div style='color:#fff;font-size:0.8rem;font-weight:700;margin-bottom:6px;'>🔌 Azure Portal (Optional)</div>", unsafe_allow_html=True)
+    use_portal_override = st.checkbox("Use Azure Portal current-month MTD override", value=False)
+    portal_current_mtd = None
+    if use_portal_override:
+        portal_current_mtd = st.number_input(
+            "Portal MTD spend ($)",
+            min_value=0.0,
+            value=0.0,
+            step=1000.0,
+            format="%.2f",
+        )
+
     st.markdown("<hr style='border-color:rgba(255,255,255,0.1);margin:14px 0'>", unsafe_allow_html=True)
 
 
@@ -395,18 +434,29 @@ with st.sidebar:
 token = get_token()
 today = datetime.now()
 
-with st.spinner("Loading Azure spend data from Azure_Spend__Forecast…"):
+with st.spinner(f"Loading Azure spend data from {SEMANTIC_MODEL_NAME}…"):
     hist_df, live_row, elapsed = fetch_spend_data(token)
 
 if hist_df.empty and not live_row:
     st.warning(
         "No data returned from the Semantic Model.\n\n"
-        "Workspace: **MI - Azure Cost Analysis and FinOps Dashboard**\n\n"
-        "Dataset: **Azure_Spend__Forecast**"
+        f"Workspace: **{WORKSPACE_NAME}**\n\n"
+        f"Dataset: **{SEMANTIC_MODEL_NAME}**"
     )
     st.stop()
 
-rows, meta    = build_forecast(hist_df, live_row, today, float(monthly_budget_input))
+rows, meta    = build_forecast(
+    hist_df,
+    live_row,
+    today,
+    float(monthly_budget_input),
+    FORECAST_YEAR,
+    rolling_weight,
+    burn_weight,
+    conf_base,
+    conf_step,
+    portal_current_mtd=portal_current_mtd,
+)
 yef           = year_end_forecast(rows)
 acc_avg       = avg_accuracy(rows)
 generated     = today.strftime("%Y-%m-%d %H:%M")
@@ -423,9 +473,11 @@ max_date_str     = live_row.get("maxdate", "—")
 # ── Banner ─────────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div class="top-banner">
-  <div class="dash-title">Azure Spend <span>12-Month Forecast</span></div>
+    <div class="dash-title">Azure Spend <span>{FORECAST_YEAR} Monthly Forecast</span></div>
   <div class="dash-meta">
     <span class="m">{TENANT_NAME}</span>
+        <span class="m">Workspace: {WORKSPACE_NAME}</span>
+        <span class="m">Semantic model: {SEMANTIC_MODEL_NAME}</span>
     <span class="m">{user_email}</span>
     <span class="m">Generated: {generated}</span>
     <span class="m">Rolling avg (last 3 mo): ${meta['rolling_avg']/1000:.1f}K/mo</span>
@@ -439,11 +491,11 @@ st.markdown(f"""
 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;
             font-size:11px;color:#475569;display:flex;gap:20px;flex-wrap:wrap;margin-bottom:16px;">
   <span>📊 <b>Actuals</b>
-    <span class="source-tag grn">Azure_spend_Analysis · SUM(total_cost) · complete_month ≠ Incomplete</span>
+        <span class="source-tag grn">Azure_spend_Analysis · SUM(total_cost) · complete_month ≠ Incomplete</span>
     &nbsp;{len(hist_df)} completed months</span>
   <span>💰 <b>Current MTD</b>
     <span class="source-tag">complete_month = Incomplete</span>
-    &nbsp;${meta['current_actual']/1000:.1f}K ({meta['days_with_data']} days)</span>
+        &nbsp;${meta['current_actual']/1000:.1f}K ({meta['days_with_data']} days){' · portal override' if use_portal_override else ''}</span>
   <span>🔥 <b>Daily burn</b>
     <span class="source-tag" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa;">MTD ÷ days elapsed</span>
     &nbsp;${meta['current_burn']/1000:.2f}K/day</span>
@@ -460,7 +512,7 @@ def acc_color(a):
 
 with k1:
     st.markdown(f"""<div class="kpi-card">
-        <div class="kpi-lbl">Annual Budget ({today.year})</div>
+        <div class="kpi-lbl">Annual Budget ({FORECAST_YEAR})</div>
         <div class="kpi-val blu">${annual_budget/1000:.0f}K</div>
         <div class="kpi-sub">${meta['monthly_budget']/1000:.1f}K/month</div>
     </div>""", unsafe_allow_html=True)
@@ -563,21 +615,21 @@ st.plotly_chart(fig, use_container_width=True)
 
 
 # ── Chart 2 — Daily burn + cumulative spend ────────────────────────────────────
-st.markdown("<div class='section-label'>🔥 Burn Rate Trend &amp; Cumulative Spend vs Budget</div>", unsafe_allow_html=True)
+st.markdown("<div class='section-label'>📉 Cumulative Spend Pace vs Budget (Monthly Forecast)</div>", unsafe_allow_html=True)
 
 fig2 = make_subplots(specs=[[{"secondary_y": True}]])
 
 burn_x, burn_y = [], []
 for r in rows:
     if r["type"] == "actual" and r["actual"] is not None and r["days_in_month"]:
-        burn_x.append(r["label"]); burn_y.append(r["actual"] / r["days_in_month"] / 1000)
+        burn_x.append(r["label"]); burn_y.append(r["actual"] / r["days_in_month"] * 30 / 1000)
     elif r["type"] == "current":
-        burn_x.append(r["label"]); burn_y.append(meta["current_burn"] / 1000)
+        burn_x.append(r["label"]); burn_y.append(meta["current_burn"] * 30 / 1000)
 
 if burn_x:
     fig2.add_trace(go.Scatter(x=burn_x, y=burn_y, mode="lines+markers",
-        name="Daily Burn Rate ($K/day)", line=dict(color="#ea580c", width=2.5),
-        marker=dict(size=6), hovertemplate="%{x}<br>Burn: $%{y:.2f}K/day<extra></extra>"),
+        name="Monthly Run-Rate at Current Pace ($K/mo)", line=dict(color="#ea580c", width=2.5),
+        marker=dict(size=6), hovertemplate="%{x}<br>Run-rate: $%{y:.2f}K/mo<extra></extra>"),
         secondary_y=False)
 
 running = 0.0
@@ -602,7 +654,7 @@ fig2.update_layout(
     xaxis=dict(showgrid=False, tickfont=dict(size=11)),
     hovermode="x unified", font=dict(family="Inter, system-ui, sans-serif"),
 )
-fig2.update_yaxes(title_text="Daily Burn ($K/day)", showgrid=True, gridcolor="#f1f5f9",
+fig2.update_yaxes(title_text="Monthly Run-Rate ($K/mo)", showgrid=True, gridcolor="#f1f5f9",
                   ticksuffix="K", tickfont=dict(size=11), secondary_y=False)
 fig2.update_yaxes(title_text="Cumulative ($K)", ticksuffix="K",
                   tickfont=dict(size=11), secondary_y=True)
@@ -768,14 +820,14 @@ with col_stats:
 
     st.markdown("""
 <div class="method-box" style="margin-top:12px;">
-  <b>Data source — Azure_Spend__Forecast</b><br>
+        <b>Data source — Azure_Spend_Forecast</b><br>
   <b>Table:</b> Azure_spend_Analysis · 6 columns · pre-aggregated in Fabric<br>
   <b>Actuals:</b> SUM(total_cost) · complete_month ≠ "Incomplete"<br>
   <b>Current MTD:</b> total_cost where complete_month = "Incomplete"<br>
   <b>Daily burn:</b> MTD ÷ days_with_data<br>
   <b>EOM projection:</b> MTD + burn × days remaining<br>
-  <b>Forecast:</b> 70% rolling 3-month avg + 30% burn × days in month<br>
-  <b>Confidence band:</b> ±15% base, +2%/month out
+        <b>Forecast:</b> weighted rolling-average business rule (configurable from sidebar)<br>
+        <b>Confidence band:</b> configurable base + month-out increment
 </div>""", unsafe_allow_html=True)
 
 
@@ -783,6 +835,6 @@ with col_stats:
 st.markdown(f"""
 <div class="dash-footer">
   <span>{completed_months} months actual · {forecast_months} months forecast · accuracy {str(acc_avg)+'%' if acc_avg else 'N/A'}</span>
-  <span>Azure_Spend__Forecast · Dataset: {DATASET_ID[:8]}... · Cache: 5 min · Auto-refresh: 5 min</span>
+    <span>{SEMANTIC_MODEL_NAME} · Dataset: {DATASET_ID[:8]}... · Cache: 5 min · Auto-refresh: 5 min</span>
 </div>
 """, unsafe_allow_html=True)
