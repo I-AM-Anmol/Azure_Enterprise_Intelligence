@@ -22,7 +22,7 @@ TENANT_ID            = "e240d61e-61e3-4c9e-ab90-8644b2f4d2a9"
 WORKSPACE_ID         = "eca3c81e-a968-42a5-899f-d8fc1a45ebec"
 WORKSPACE_NAME       = "MI - Azure Cost Analysis and FinOps Dashboard"
 DATASET_ID           = "10b45f31-71d5-463c-ac78-bce785b9fd8f"
-SEMANTIC_MODEL_NAME  = "Azure_Spend_Forecast"
+SEMANTIC_MODEL_NAME  = "Azure_Spend__Forecast"
 FORECAST_YEAR        = 2026
 TENANT_NAME          = "MedInsight Production · Engineering · Milliman"
 
