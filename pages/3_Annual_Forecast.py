@@ -14,7 +14,7 @@ import base64
 import time
 from datetime import datetime
 from calendar import monthrange
-from azure.identity import AzureCliCredential
+from azure.identity import AzureCliCredential, ClientSecretCredential
 from streamlit_autorefresh import st_autorefresh
 
 # ── Configuration ──────────────────────────────────────────────────────────────
@@ -125,38 +125,13 @@ table.fg tr:hover td     { background:#f8fafc; }
 """, unsafe_allow_html=True)
 
 
-# ── Auth ───────────────────────────────────────────────────────────────────────
-def _sp_token_via_msal(tenant_id, client_id, client_secret):
-    """Get SP token via MSAL with a shared requests session (Windows cert store already injected)."""
-    import msal
-    session = requests.Session()
-    app = msal.ConfidentialClientApplication(
-        client_id,
-        authority=f"https://login.microsoftonline.com/{tenant_id}",
-        client_credential=client_secret,
-        http_client=session,
-    )
-    result = app.acquire_token_for_client(
-        scopes=["https://analysis.windows.net/powerbi/api/.default"]
-    )
-    if "access_token" in result:
-        return result["access_token"]
-    raise RuntimeError(f"MSAL SP auth failed: {result.get('error_description', result)}")
-
-
 def get_token():
-    # Try az login (user delegated token) first — works locally, bypasses SP tenant restriction
-    try:
-        cred = AzureCliCredential(tenant_id=TENANT_ID)
-        token = cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
-        return token, "Azure CLI", TENANT_ID
-    except Exception:
-        pass  # no az login session — try SP next
-
-    # Fallback: Service Principal from secrets.toml
+    # Same pattern as pages/1_Storage_Lifecycle.py and pages/2_Budget_Analysis.py:
+    # Service principal from Streamlit secrets first, then Azure CLI for local development.
     try:
         az = st.secrets["azure"]
-        token = _sp_token_via_msal(az["tenant_id"], az["client_id"], az["client_secret"])
+        cred = ClientSecretCredential(az["tenant_id"], az["client_id"], az["client_secret"])
+        token = cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
         return token, "Service Principal", az["tenant_id"]
     except (KeyError, FileNotFoundError):
         pass
@@ -170,6 +145,13 @@ def get_token():
             "(https://app.powerbi.com/admin-portal/tenantSettings)."
         )
         st.stop()
+
+    try:
+        cred = AzureCliCredential(tenant_id=TENANT_ID)
+        token = cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
+        return token, "Azure CLI", TENANT_ID
+    except Exception:
+        pass
 
     st.error(
         "**Auth failed — no valid credential found.**\n\n"
