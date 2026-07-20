@@ -1,11 +1,12 @@
 try:
     import truststore
-    truststore.inject_into_ssl()  # Windows cert store — fixes corporate proxy SSL
+    truststore.inject_into_ssl()  # Windows cert store — fixes corporate proxy SSL interception
 except ImportError:
-    pass  # not needed on Linux/cloud environments
+    pass
 
 import streamlit as st
 import requests
+import msal
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -14,15 +15,15 @@ import base64
 import time
 from datetime import datetime
 from calendar import monthrange
-from azure.identity import AzureCliCredential, ClientSecretCredential
+from azure.identity import AzureCliCredential
 from streamlit_autorefresh import st_autorefresh
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 TENANT_ID            = "e240d61e-61e3-4c9e-ab90-8644b2f4d2a9"
 WORKSPACE_ID         = "eca3c81e-a968-42a5-899f-d8fc1a45ebec"
 WORKSPACE_NAME       = "MI - Azure Cost Analysis and FinOps Dashboard"
-DATASET_ID           = "10b45f31-71d5-463c-ac78-bce785b9fd8f"
-SEMANTIC_MODEL_NAME  = "Azure_Spend__Forecast"
+DATASET_ID           = "056c6a06-5d94-4692-937c-eb3239e4365f"
+SEMANTIC_MODEL_NAME  = "Azure_Spend_Forecast_Import"
 FORECAST_YEAR        = 2026
 TENANT_NAME          = "MedInsight Production · Engineering · Milliman"
 
@@ -125,27 +126,35 @@ table.fg tr:hover td     { background:#f8fafc; }
 """, unsafe_allow_html=True)
 
 
+def _msal_sp_token(tenant_id, client_id, client_secret):
+    """Acquire SP token via MSAL with a shared requests session (truststore already injected)."""
+    session = requests.Session()
+    app = msal.ConfidentialClientApplication(
+        client_id,
+        authority=f"https://login.microsoftonline.com/{tenant_id}",
+        client_credential=client_secret,
+        http_client=session,
+    )
+    result = app.acquire_token_for_client(
+        scopes=["https://analysis.windows.net/powerbi/api/.default"]
+    )
+    if "access_token" in result:
+        return result["access_token"]
+    raise RuntimeError(result.get("error_description", str(result)))
+
+
 def get_token():
-    # Same pattern as pages/1_Storage_Lifecycle.py and pages/2_Budget_Analysis.py:
-    # Service principal from Streamlit secrets first, then Azure CLI for local development.
+    # SP via MSAL (works through corporate proxy thanks to truststore)
     try:
         az = st.secrets["azure"]
-        cred = ClientSecretCredential(az["tenant_id"], az["client_id"], az["client_secret"])
-        token = cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
+        token = _msal_sp_token(az["tenant_id"], az["client_id"], az["client_secret"])
         return token, "Service Principal", az["tenant_id"]
     except (KeyError, FileNotFoundError):
         pass
     except Exception as sp_err:
-        st.error(
-            f"**Auth failed.** SP error: `{sp_err}`\n\n"
-            "**For local use:** Run `az login --tenant e240d61e-61e3-4c9e-ab90-8644b2f4d2a9` in terminal, then refresh.\n\n"
-            "**For Streamlit Cloud (SP):** A Power BI admin must enable "
-            "**Allow service principals to use Power BI APIs** in the "
-            "[Power BI Admin Portal → Developer settings]"
-            "(https://app.powerbi.com/admin-portal/tenantSettings)."
-        )
-        st.stop()
+        st.warning(f"SP auth failed: `{sp_err}` — falling back to az login")
 
+    # Fallback: az login session (local dev)
     try:
         cred = AzureCliCredential(tenant_id=TENANT_ID)
         token = cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
