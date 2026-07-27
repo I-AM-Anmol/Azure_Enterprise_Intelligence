@@ -853,9 +853,33 @@ if fc_labels:
         name="Forecasted Spend", marker_color="#a5b4fc", opacity=0.65,
         hovertemplate="%{x}<br>Forecast: $%{y:.1f}K<extra></extra>"))
 
+# Data labels — total bar height per month
+label_x, label_y, label_text, label_colors = [], [], [], []
+for r in rows:
+    if r["type"] == "actual" and r["actual"] is not None:
+        val = r["actual"] / 1000
+        label_x.append(r["label"]); label_y.append(val)
+        label_text.append(f"${val:.0f}K"); label_colors.append("#1e3a5f")
+    elif r["type"] == "current":
+        val = (r["forecast"] or r["actual"]) / 1000
+        label_x.append(r["label"]); label_y.append(val)
+        label_text.append(f"${val:.0f}K"); label_colors.append("#1e3a5f")
+    elif r["type"] == "forecast" and r["forecast"] is not None:
+        val = r["forecast"] / 1000
+        label_x.append(r["label"]); label_y.append(val)
+        label_text.append(f"${val:.0f}K"); label_colors.append("#64748b")
+
+fig.add_trace(go.Scatter(
+    x=label_x, y=label_y, mode="text",
+    text=label_text,
+    textposition="top center",
+    textfont=dict(size=10, color=label_colors),
+    hoverinfo="skip", showlegend=False,
+))
+
 fig.update_layout(
-    barmode="stack", plot_bgcolor="#fff", paper_bgcolor="#fff", height=380,
-    margin=dict(t=20, b=40, l=60, r=20),
+    barmode="stack", plot_bgcolor="#fff", paper_bgcolor="#fff", height=420,
+    margin=dict(t=40, b=40, l=60, r=20),
     legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1, font=dict(size=11)),
     xaxis=dict(showgrid=False, tickfont=dict(size=11),
                categoryorder="array", categoryarray=labels),
