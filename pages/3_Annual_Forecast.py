@@ -854,20 +854,26 @@ if fc_labels:
         hovertemplate="%{x}<br>Forecast: $%{y:.1f}K<extra></extra>"))
 
 # Data labels — total bar height per month
+def _fmt_label(val_k):
+    """val_k is in thousands. Show $X.XM if >= 1M, else $XXXK."""
+    if val_k >= 1000:
+        return f"${val_k / 1000:.2f}M"
+    return f"${val_k:.0f}K"
+
 label_x, label_y, label_text, label_colors = [], [], [], []
 for r in rows:
     if r["type"] == "actual" and r["actual"] is not None:
         val = r["actual"] / 1000
         label_x.append(r["label"]); label_y.append(val)
-        label_text.append(f"${val:.0f}K"); label_colors.append("#1e3a5f")
+        label_text.append(_fmt_label(val)); label_colors.append("#1e3a5f")
     elif r["type"] == "current":
         val = (r["forecast"] or r["actual"]) / 1000
         label_x.append(r["label"]); label_y.append(val)
-        label_text.append(f"${val:.0f}K"); label_colors.append("#1e3a5f")
+        label_text.append(_fmt_label(val)); label_colors.append("#1e3a5f")
     elif r["type"] == "forecast" and r["forecast"] is not None:
         val = r["forecast"] / 1000
         label_x.append(r["label"]); label_y.append(val)
-        label_text.append(f"${val:.0f}K"); label_colors.append("#64748b")
+        label_text.append(_fmt_label(val)); label_colors.append("#64748b")
 
 fig.add_trace(go.Scatter(
     x=label_x, y=label_y, mode="text",
