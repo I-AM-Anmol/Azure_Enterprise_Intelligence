@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import json
 import base64
+import numpy as np
 import time
 from datetime import datetime
 from calendar import monthrange
@@ -22,8 +23,8 @@ from streamlit_autorefresh import st_autorefresh
 TENANT_ID            = "e240d61e-61e3-4c9e-ab90-8644b2f4d2a9"
 WORKSPACE_ID         = "eca3c81e-a968-42a5-899f-d8fc1a45ebec"
 WORKSPACE_NAME       = "MI - Azure Cost Analysis and FinOps Dashboard"
-DATASET_ID           = "056c6a06-5d94-4692-937c-eb3239e4365f"
-SEMANTIC_MODEL_NAME  = "Azure_Spend_Forecast_Import"
+DATASET_ID           = "410b6252-6491-4970-889e-f9f31f1fc32d"
+SEMANTIC_MODEL_NAME  = "MedInsight Azure Spend Analysis"
 FORECAST_YEAR        = 2026
 TENANT_NAME          = "MedInsight Production · Engineering · Milliman"
 
@@ -250,21 +251,49 @@ def _pbi_query(token, dax, dataset_id, timeout=60):
     return df
 
 
-# ── DAX — single flat query against Azure_Spend_Forecast model ────────────────
-# Table: Azure_spend_Analysis
-# Columns: billing_period_start_date, complete_month, total_cost,
-#          max_date, days_in_month, days_with_data
-_DAX = """
+# ── DAX — monthly spend with per-series breakdown for WLS regression ──────────
+# Pulls: total, internal vs client split, key categories (Databricks, VM, Storage)
+_DAX_SPEND = """
 EVALUATE
 SUMMARIZECOLUMNS(
-    'Azure_spend_Analysis'[complete_month],
-    'Azure_spend_Analysis'[billing_period_start_date],
-    'Azure_spend_Analysis'[max_date],
-    'Azure_spend_Analysis'[days_in_month],
-    'Azure_spend_Analysis'[days_with_data],
-    "total_cost", SUM('Azure_spend_Analysis'[total_cost])
+    'Azure_Expense_Details'[Billing Period Start Date],
+    'Azure_Expense_Details'[Complete_Month],
+    "total_cost",      [Azure cost],
+    "internal_cost",   CALCULATE([Azure cost], 'Azure_Expense_Details'[Client Name] = "MedInsight Internal"),
+    "client_cost",     CALCULATE([Azure cost], 'Azure_Expense_Details'[Client Name] <> "MedInsight Internal"),
+    "db_cost",         CALCULATE([Azure cost], 'Azure_Expense_Details'[MeterCategory] = "Azure Databricks"),
+    "vm_cost",         CALCULATE([Azure cost], 'Azure_Expense_Details'[MeterCategory] = "Virtual Machines"),
+    "storage_cost",    CALCULATE([Azure cost], 'Azure_Expense_Details'[MeterCategory] = "Storage"),
+    "list_cost",       [List cost],
+    "savings",         [Savings ($)]
 )
-ORDER BY 'Azure_spend_Analysis'[billing_period_start_date] ASC
+ORDER BY 'Azure_Expense_Details'[Billing Period Start Date] ASC
+"""
+
+# ── DAX — Databricks reservation KPIs (scalar row) ────────────────────────────
+_DAX_DB_KPIS = """
+EVALUATE
+ROW(
+    "db_reservation_total",     [MedInsight Azure DataBricks Reservations],
+    "db_consumed",              [DataBricks Consumed],
+    "db_pct_consumed",          [% DataBricks Consumed (Starting August'24)],
+    "db_remaining",             [Remaining DataBricks cost],
+    "db_pct_remaining",         [% Remaining DataBricks Consumption],
+    "db_projected_current",     [Projected Usage at current pace],
+    "db_projected_required",    [Projected Usage at Required pace],
+    "db_req_per_day",           [Databrick Comsumption Required per Day],
+    "db_current_avg_per_day",   [DataBrick Current Average Consumption],
+    "db_next30_required",       [Databricks next 30 days required consumption (Current Date)],
+    "db_risk_current",          [DataBricks Res. Current pace- Risk/NO-Risk indicator],
+    "db_risk_required",         [DataBricks Res. Required pace- Risk/NO-Risk indicator],
+    "db_complete_days",         [Databricks Complete Day Count],
+    "db_pending_days",          [Databricks Pending day count],
+    "latest_date",              [Latest Date],
+    "avg_mom_6m",               [Avg.MoM % Change (6 Mth)],
+    "variance_30d_pct",         [30 Days Variance (%)],
+    "current_cost_30d",         [Current Cost (30 Days)],
+    "prior_cost_30d",           [Prior Cost (30 Days)]
+)
 """
 
 
@@ -272,105 +301,175 @@ ORDER BY 'Azure_spend_Analysis'[billing_period_start_date] ASC
 def fetch_spend_data(token, dataset_id):
     t0 = time.time()
     try:
-        df = _pbi_query(token, _DAX, dataset_id)
+        df = _pbi_query(token, _DAX_SPEND, dataset_id)
     except Exception as exc:
-        st.warning(f"Could not query Azure_spend_Analysis: {exc}")
-        return pd.DataFrame(), {}, round(time.time() - t0, 1), str(exc)
+        st.warning(f"Could not query Azure_Expense_Details: {exc}")
+        return pd.DataFrame(), {}, round(time.time() - t0, 1), str(exc), {}
 
     if df.empty:
-        return pd.DataFrame(), {}, round(time.time() - t0, 1), None
+        return pd.DataFrame(), {}, round(time.time() - t0, 1), None, {}
 
     df.columns = [c.lower() for c in df.columns]
-    df["total_cost"]                 = pd.to_numeric(df["total_cost"], errors="coerce").fillna(0)
-    df["days_in_month"]              = pd.to_numeric(df["days_in_month"], errors="coerce").fillna(0).astype(int)
-    df["days_with_data"]             = pd.to_numeric(df["days_with_data"], errors="coerce").fillna(0).astype(int)
-    df["billing_period_start_date"]  = pd.to_datetime(df["billing_period_start_date"], errors="coerce", utc=True)
-    df["max_date"]                   = pd.to_datetime(df["max_date"], errors="coerce", utc=True)
+    for col in ["total_cost", "internal_cost", "client_cost", "db_cost", "vm_cost",
+                "storage_cost", "list_cost", "savings"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        else:
+            df[col] = 0.0
+    df["billing period start date"]  = pd.to_datetime(df["billing period start date"], errors="coerce", utc=True)
 
-    # Split incomplete (current partial month) vs completed months
     is_incomplete = df["complete_month"].str.strip() == "Incomplete"
     hist_df       = df[~is_incomplete].copy()
     inc_df        = df[is_incomplete]
 
-    hist_df["usageyear"]  = hist_df["billing_period_start_date"].dt.year.fillna(0).astype(int)
-    hist_df["usagemonth"] = hist_df["billing_period_start_date"].dt.month.fillna(0).astype(int)
+    hist_df["usageyear"]  = hist_df["billing period start date"].dt.year.fillna(0).astype(int)
+    hist_df["usagemonth"] = hist_df["billing period start date"].dt.month.fillna(0).astype(int)
     hist_df = hist_df[hist_df["usageyear"] > 0].sort_values(["usageyear", "usagemonth"])
+    hist_df["days_in_month"] = hist_df.apply(
+        lambda r: monthrange(int(r["usageyear"]), int(r["usagemonth"]))[1], axis=1
+    )
+    hist_df["days_with_data"] = hist_df["days_in_month"]  # completed months = full data
 
+    today = datetime.now()
     live_row = {}
     if not inc_df.empty:
         r = inc_df.iloc[0]
+        dim = monthrange(today.year, today.month)[1]
         live_row["currentmtd"]    = float(r["total_cost"])
-        live_row["days_in_month"] = int(r["days_in_month"])
-        live_row["days_with_data"]= int(r["days_with_data"])
-        live_row["maxdate"]       = str(r["max_date"])[:10] if pd.notna(r["max_date"]) else "—"
+        live_row["days_in_month"] = dim
+        live_row["days_with_data"]= today.day - 1 or 1
+        live_row["maxdate"]       = today.strftime("%Y-%m-%d")
     elif not hist_df.empty:
         live_row["currentmtd"]    = 0.0
         live_row["days_in_month"] = 0
         live_row["days_with_data"]= 0
-        live_row["maxdate"]       = str(df["max_date"].max())[:10]
+        live_row["maxdate"]       = str(hist_df["billing period start date"].max())[:10]
 
-    return hist_df, live_row, round(time.time() - t0, 1), None
+    # Fetch Databricks KPIs
+    db_kpis = {}
+    try:
+        db_df = _pbi_query(token, _DAX_DB_KPIS, dataset_id)
+        if not db_df.empty:
+            db_kpis = {c.lower(): db_df.iloc[0][c] for c in db_df.columns}
+    except Exception:
+        pass
+
+    return hist_df, live_row, round(time.time() - t0, 1), None, db_kpis
 
 
-# ── Forecast engine ────────────────────────────────────────────────────────────
+# ── WLS helpers ────────────────────────────────────────────────────────────────
+def _wls_fit(x, y, w):
+    """Weighted Least Squares: linear trend y = a + b*x with quadratic weights."""
+    W = np.diag(w)
+    X = np.column_stack([np.ones_like(x), x])
+    beta = np.linalg.inv(X.T @ W @ X) @ (X.T @ W @ y)
+    yhat = X @ beta
+    res  = y - yhat
+    wrmse = float(np.sqrt(np.sum(w * res**2) / np.mean(w)))
+    ss_res = float(np.sum(w * (y - yhat) ** 2))
+    ss_tot = float(np.sum(w * (y - np.average(y, weights=w)) ** 2))
+    r2 = float(1 - ss_res / ss_tot) if ss_tot > 0 else 0.0
+    return float(beta[0]), float(beta[1]), wrmse, r2
+
+
+def _wls_series(values):
+    """Fit WLS to a list of (non-None) monthly values. Returns (intercept, slope, rmse, r2) or None."""
+    clean = [v for v in values if v is not None and v > 0]
+    if len(clean) < 2:
+        return None
+    n = len(clean)
+    x = np.arange(1, n + 1, dtype=float)
+    y = np.array(clean, dtype=float)
+    w = (x ** 2).astype(float)
+    w /= w.sum()
+    return _wls_fit(x, y, w)
+
+
+# ── Forecast engine (WLS regression) ──────────────────────────────────────────
 def build_forecast(
     hist_df,
     live_row,
     today,
     monthly_budget,
     target_year,
-    rolling_weight,
-    burn_weight,
-    conf_base,
-    conf_step,
+    rolling_weight=None,   # kept for signature compat, unused
+    burn_weight=None,
+    conf_base=None,
+    conf_step=None,
     portal_current_mtd=None,
 ):
     curr_yr = target_year
     curr_mo = today.month if target_year == today.year else 1
 
-    current_actual   = float(live_row.get("currentmtd", 0) or 0)
+    current_actual  = float(live_row.get("currentmtd", 0) or 0)
     if portal_current_mtd is not None and portal_current_mtd > 0:
         current_actual = float(portal_current_mtd)
-    days_in_curr_mo  = int(live_row.get("days_in_month", monthrange(curr_yr, curr_mo)[1]))
-    days_with_data   = int(live_row.get("days_with_data", today.day))
-    days_remaining   = days_in_curr_mo - days_with_data
-    # Daily burn from actual MTD ÷ days elapsed
-    current_burn     = (current_actual / days_with_data) if days_with_data > 0 and current_actual > 0 else 0
-    projected_eom    = current_actual + current_burn * days_remaining
+    days_in_curr_mo = int(live_row.get("days_in_month", monthrange(curr_yr, curr_mo)[1]))
+    days_with_data  = int(live_row.get("days_with_data", today.day))
+    days_remaining  = days_in_curr_mo - days_with_data
+    current_burn    = (current_actual / days_with_data) if days_with_data > 0 and current_actual > 0 else 0
+    projected_eom   = current_actual + current_burn * days_remaining
     if projected_eom <= 0 and current_actual > 0:
         projected_eom = current_actual
 
-    # Build year/month → cost lookup from completed months
-    actual_by_ym = {}
+    # Build per-series lookups from all completed months (across all years)
+    series_keys = ["total_cost", "internal_cost", "client_cost", "db_cost", "vm_cost", "storage_cost"]
+    by_ym = {k: {} for k in series_keys}
     if not hist_df.empty:
         for _, row in hist_df.iterrows():
-            actual_by_ym[(int(row["usageyear"]), int(row["usagemonth"]))] = float(row["total_cost"])
+            key = (int(row["usageyear"]), int(row["usagemonth"]))
+            for k in series_keys:
+                by_ym[k][key] = float(row.get(k, 0) or 0)
 
-    # Rolling 3-month average from completed months this year
-    completed = [actual_by_ym[(curr_yr, m)] for m in range(1, curr_mo) if (curr_yr, m) in actual_by_ym]
-    if len(completed) >= 3:
-        rolling_avg = sum(completed[-3:]) / 3
-    elif completed:
-        rolling_avg = sum(completed) / len(completed)
+    # Collect ALL completed months sorted chronologically for WLS fitting
+    all_ym_sorted = sorted(by_ym["total_cost"].keys())
+
+    # WLS fit per series using ALL historical completed months
+    wls_params = {}
+    for k in series_keys:
+        vals = [by_ym[k].get(ym, 0) for ym in all_ym_sorted]
+        result = _wls_series(vals)
+        wls_params[k] = result  # (intercept, slope, rmse, r2) or None
+
+    n_hist = len(all_ym_sorted)  # number of completed months used for fitting
+
+    def wls_predict(k, steps_from_last):
+        """Predict using WLS trend: x = n_hist + steps_from_last."""
+        p = wls_params[k]
+        if p is None:
+            # fallback: mean of available values
+            vals = list(by_ym[k].values())
+            return float(np.mean(vals)) if vals else monthly_budget, monthly_budget * 0.15, 0.0
+        a, b, rmse, r2 = p
+        pred = a + b * (n_hist + steps_from_last)
+        pred = max(pred, 0)
+        return pred, rmse, r2
+
+    # Rolling avg of last 3 completed months (for banner display only)
+    completed_this_yr = [by_ym["total_cost"].get((curr_yr, m)) for m in range(1, curr_mo)
+                         if (curr_yr, m) in by_ym["total_cost"]]
+    completed_this_yr = [v for v in completed_this_yr if v is not None]
+    if len(completed_this_yr) >= 3:
+        rolling_avg = sum(completed_this_yr[-3:]) / 3
+    elif completed_this_yr:
+        rolling_avg = sum(completed_this_yr) / len(completed_this_yr)
     else:
         rolling_avg = monthly_budget
 
-    def band(base, months_out):
-        spread = conf_base + months_out * conf_step
-        return round(base * (1 - spread), 2), round(base * (1 + spread), 2)
-
     month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
     rows = []
+    steps_from_last = 1  # increments for each future month
 
     for m in range(1, 13):
         dim   = monthrange(curr_yr, m)[1]
         label = f"{month_names[m-1]} {curr_yr}"
 
         if m < curr_mo:
-            actual   = actual_by_ym.get((curr_yr, m))
+            actual   = by_ym["total_cost"].get((curr_yr, m))
             row_type = "actual"
             forecast = actual
-            lo, hi   = (actual, actual) if actual is not None else (None, None)
+            lo = hi  = (actual, actual) if actual is not None else (None, None)
+            lo, hi   = lo if isinstance(lo, tuple) else (lo, hi)
             burn_day = (actual / dim) if actual else None
             accuracy = None
 
@@ -378,19 +477,23 @@ def build_forecast(
             actual   = current_actual
             row_type = "current"
             forecast = projected_eom
-            lo, hi   = band(forecast, 0)
+            _, rmse, _ = wls_predict("total_cost", 0)
+            lo = max(0, forecast - rmse)
+            hi = forecast + rmse
             burn_day = current_burn
             accuracy = None
+            steps_from_last = 1  # next month is 1 step beyond current
 
         else:
-            months_out  = m - curr_mo
-            burn_extrap = (current_burn * dim) if current_burn > 0 else rolling_avg
-            forecast    = round((rolling_weight * rolling_avg) + (burn_weight * burn_extrap), 2)
-            actual      = None
-            row_type    = "forecast"
-            lo, hi      = band(forecast, months_out)
-            burn_day    = current_burn if current_burn > 0 else None
-            accuracy    = None
+            pred, rmse, r2 = wls_predict("total_cost", steps_from_last)
+            forecast = round(pred, 2)
+            actual   = None
+            row_type = "forecast"
+            lo = max(0, round(forecast - rmse, 2))
+            hi = round(forecast + rmse, 2)
+            burn_day = current_burn if current_burn > 0 else None
+            accuracy = None
+            steps_from_last += 1
 
         rows.append({
             "month_num": m, "month_name": month_names[m-1], "year": curr_yr,
@@ -400,30 +503,96 @@ def build_forecast(
             "burn_day": burn_day, "days_in_month": dim, "accuracy": None,
         })
 
-    # Back-calculate forecast accuracy for completed months
+    # Back-calculate forecast accuracy vs WLS for completed months
     for i, row in enumerate(rows):
         if row["type"] != "actual" or row["actual"] is None:
             continue
-        preceding = [rows[j]["actual"] for j in range(max(0, i-3), i) if rows[j]["actual"] is not None]
-        if not preceding:
+        # Use WLS prediction from the state at i-1 (i.e., steps_from_last = 1)
+        idx_in_hist = next(
+            (j for j, ym in enumerate(all_ym_sorted) if ym == (curr_yr, row["month_num"])), None
+        )
+        if idx_in_hist is None or idx_in_hist < 2:
             continue
-        implied = sum(preceding) / len(preceding)
+        # Fit WLS on data up to (but not including) this month
+        prior_vals = [by_ym["total_cost"].get(all_ym_sorted[j], 0) for j in range(idx_in_hist)]
+        r = _wls_series(prior_vals)
+        if r is None:
+            continue
+        a, b, _, _ = r
+        implied = a + b * (idx_in_hist + 1)
+        implied = max(implied, 0)
         if row["actual"] > 0:
             rows[i]["accuracy"] = round(100 - abs(row["actual"] - implied) / row["actual"] * 100, 1)
 
+    # Per-series WLS diagnostics for display
+    series_diag = {}
+    for k in series_keys:
+        p = wls_params[k]
+        if p:
+            a, b, rmse, r2 = p
+            series_diag[k] = {"slope": b, "rmse": rmse, "r2": r2}
+
     meta = {
-        "monthly_budget":  monthly_budget,
-        "annual_budget":   monthly_budget * 12,
-        "current_actual":  current_actual,
-        "current_burn":    current_burn,
-        "projected_eom":   projected_eom,
-        "days_remaining":  days_remaining,
-        "days_with_data":  days_with_data,
-        "days_in_curr_mo": days_in_curr_mo,
-        "rolling_avg":     rolling_avg,
-        "completed_count": len(completed),
+        "monthly_budget":   monthly_budget,
+        "annual_budget":    monthly_budget * 12,
+        "current_actual":   current_actual,
+        "current_burn":     current_burn,
+        "projected_eom":    projected_eom,
+        "days_remaining":   days_remaining,
+        "days_with_data":   days_with_data,
+        "days_in_curr_mo":  days_in_curr_mo,
+        "rolling_avg":      rolling_avg,
+        "completed_count":  len(completed_this_yr),
+        "n_hist_months":    n_hist,
+        "series_diag":      series_diag,
+        # per-series WLS forecast for remaining months (Aug–Dec or whatever is future)
+        "wls_series_rows":  _build_series_rows(by_ym, wls_params, all_ym_sorted, curr_yr, curr_mo,
+                                               days_in_curr_mo, days_with_data, current_burn,
+                                               projected_eom, month_names, n_hist),
     }
     return rows, meta
+
+
+def _build_series_rows(by_ym, wls_params, all_ym_sorted, curr_yr, curr_mo,
+                       days_in_curr_mo, days_with_data, current_burn, projected_eom,
+                       month_names, n_hist):
+    """Build per-series forecast rows for Internal, Client, VM, DB, Storage."""
+    series_cfg = [
+        ("internal_cost", "Internal",  "#2563eb"),
+        ("client_cost",   "Client",    "#16a34a"),
+        ("db_cost",       "Databricks","#7c3aed"),
+        ("vm_cost",       "VM",        "#ea580c"),
+        ("storage_cost",  "Storage",   "#0891b2"),
+    ]
+    result = {cfg[1]: [] for cfg in series_cfg}
+    steps_from_last = 1
+
+    for m in range(1, 13):
+        label = f"{month_names[m-1]} {curr_yr}"
+        for k, name, _ in series_cfg:
+            actual = by_ym[k].get((curr_yr, m))
+            if m < curr_mo and actual is not None:
+                result[name].append({"label": label, "type": "actual", "value": actual})
+            elif m == curr_mo:
+                # Scale EOM projection by series share from latest actual month
+                latest_total = max(by_ym["total_cost"].get(all_ym_sorted[-1], 1), 1) if all_ym_sorted else 1
+                latest_series = by_ym[k].get(all_ym_sorted[-1], 0) if all_ym_sorted else 0
+                share = latest_series / latest_total
+                result[name].append({"label": label, "type": "current", "value": projected_eom * share})
+            else:
+                p = wls_params[k]
+                if p:
+                    a, b, rmse, _ = p
+                    pred = max(a + b * (n_hist + steps_from_last), 0)
+                else:
+                    vals = list(by_ym[k].values())
+                    pred = float(np.mean(vals)) if vals else 0
+                    rmse = pred * 0.15
+                result[name].append({"label": label, "type": "forecast", "value": round(pred, 2)})
+        if m >= curr_mo:
+            steps_from_last += 1
+
+    return result
 
 
 def year_end_forecast(rows):
@@ -454,12 +623,20 @@ with st.sidebar:
 
     st.markdown("<hr style='border-color:rgba(255,255,255,0.1);margin:14px 0'>", unsafe_allow_html=True)
     st.markdown("<div style='color:#fff;font-size:0.8rem;font-weight:700;margin-bottom:6px;'>📐 Forecast Method</div>", unsafe_allow_html=True)
-    st.caption("Weighted rolling-average monthly forecast for remaining 2026 months.")
-    rolling_weight = st.slider("Rolling average weight", min_value=0.5, max_value=0.9, value=0.7, step=0.05)
-    burn_weight = round(1.0 - rolling_weight, 2)
-    st.caption(f"Burn-rate weight: {burn_weight:.2f}")
-    conf_base = st.slider("Confidence base spread", min_value=0.10, max_value=0.25, value=0.15, step=0.01)
-    conf_step = st.slider("Confidence monthly increment", min_value=0.01, max_value=0.05, value=0.02, step=0.01)
+    st.markdown(
+        "<div style='color:rgba(255,255,255,0.7);font-size:0.72rem;line-height:1.5;margin-bottom:8px;'>"
+        "<b>Weighted Least Squares (WLS)</b> regression — quadratic weights so recent months "
+        "dominate. Linear trend fitted across all available completed months.<br>"
+        "Confidence bands = &plusmn;RMSE of weighted residuals (data-driven, not a fixed %)."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    # WLS has no user-configurable weight parameters — settings are automatic
+    # Keep variables for backward compat with build_forecast signature
+    rolling_weight = 0.7
+    burn_weight    = 0.3
+    conf_base      = 0.15
+    conf_step      = 0.02
 
     st.markdown("<hr style='border-color:rgba(255,255,255,0.1);margin:14px 0'>", unsafe_allow_html=True)
     st.markdown("<div style='color:#fff;font-size:0.8rem;font-weight:700;margin-bottom:6px;'>🔌 Azure Portal (Optional)</div>", unsafe_allow_html=True)
@@ -499,7 +676,7 @@ except Exception as exc:
     st.stop()
 
 with st.spinner(f"Loading Azure spend data from {resolved_dataset_name}…"):
-    hist_df, live_row, elapsed, query_error = fetch_spend_data(token, resolved_dataset_id)
+    hist_df, live_row, elapsed, query_error, db_kpis = fetch_spend_data(token, resolved_dataset_id)
 
 with st.sidebar:
     with st.expander("Auth Diagnostics", expanded=False):
@@ -529,10 +706,6 @@ rows, meta    = build_forecast(
     today,
     float(monthly_budget_input),
     FORECAST_YEAR,
-    rolling_weight,
-    burn_weight,
-    conf_base,
-    conf_step,
     portal_current_mtd=portal_current_mtd,
 )
 yef           = year_end_forecast(rows)
@@ -558,7 +731,7 @@ st.markdown(f"""
         <span class="m">Semantic model: {resolved_dataset_name}</span>
     <span class="m">{user_email}</span>
     <span class="m">Generated: {generated}</span>
-    <span class="m">Rolling avg (last 3 mo): ${meta['rolling_avg']/1000:.1f}K/mo</span>
+    <span class="m">WLS trend across {meta['n_hist_months']} months · 3-mo avg: ${meta['rolling_avg']/1000:.1f}K/mo</span>
     <span class="m">Daily burn: ${meta['current_burn']/1000:.2f}K/day · {meta['days_remaining']}d remaining</span>
     <span class="m">Data as of: {max_date_str} · Query: {elapsed}s</span>
   </div>
@@ -569,10 +742,10 @@ st.markdown(f"""
 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;
             font-size:11px;color:#475569;display:flex;gap:20px;flex-wrap:wrap;margin-bottom:16px;">
   <span>📊 <b>Actuals</b>
-        <span class="source-tag grn">Azure_spend_Analysis · SUM(total_cost) · complete_month ≠ Incomplete</span>
+        <span class="source-tag grn">Azure_Expense_Details · [Azure cost] · Complete_Month ≠ Incomplete</span>
     &nbsp;{len(hist_df)} completed months</span>
   <span>💰 <b>Current MTD</b>
-    <span class="source-tag">complete_month = Incomplete</span>
+    <span class="source-tag">Complete_Month = Incomplete</span>
         &nbsp;${meta['current_actual']/1000:.1f}K ({meta['days_with_data']} days){' · portal override' if use_portal_override else ''}</span>
   <span>🔥 <b>Daily burn</b>
     <span class="source-tag" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa;">MTD ÷ days elapsed</span>
@@ -771,6 +944,131 @@ else:
 st.markdown("---")
 
 
+# ── Databricks Reservation Tracker ────────────────────────────────────────────
+st.markdown("<div class='section-label'>⚡ Databricks Reservation Consumption Tracker</div>", unsafe_allow_html=True)
+
+if db_kpis:
+    db_total        = float(db_kpis.get("db_reservation_total", 0) or 0)
+    db_consumed     = float(db_kpis.get("db_consumed", 0) or 0)
+    db_remaining    = float(db_kpis.get("db_remaining", 0) or 0)
+    db_pct_consumed = float(db_kpis.get("db_pct_consumed", 0) or 0) * 100
+    db_pct_remain   = float(db_kpis.get("db_pct_remaining", 0) or 0) * 100
+    db_proj_curr    = float(db_kpis.get("db_projected_current", 0) or 0)
+    db_proj_req     = float(db_kpis.get("db_projected_required", 0) or 0)
+    db_req_day      = float(db_kpis.get("db_req_per_day", 0) or 0)
+    db_avg_day      = float(db_kpis.get("db_current_avg_per_day", 0) or 0)
+    db_next30       = float(db_kpis.get("db_next30_required", 0) or 0)
+    db_risk_curr    = str(db_kpis.get("db_risk_current", "—") or "—")
+    db_risk_req     = str(db_kpis.get("db_risk_required", "—") or "—")
+    db_complete_days= int(db_kpis.get("db_complete_days", 0) or 0)
+    db_pending_days = int(db_kpis.get("db_pending_days", 0) or 0)
+    latest_date_str = str(db_kpis.get("latest_date", "—") or "—")
+    avg_mom_6m      = float(db_kpis.get("avg_mom_6m", 0) or 0) * 100
+    var_30d_pct     = float(db_kpis.get("variance_30d_pct", 0) or 0) * 100
+
+    curr_risk_color = "#dc2626" if "Risk" in db_risk_curr and "NO" not in db_risk_curr else "#16a34a"
+    curr_risk_label = "At Risk" if "Risk" in db_risk_curr and "NO" not in db_risk_curr else "On Track"
+    req_risk_color  = "#dc2626" if "Risk" in db_risk_req and "NO" not in db_risk_req else "#16a34a"
+    req_risk_label  = "At Risk" if "Risk" in db_risk_req and "NO" not in db_risk_req else "On Track"
+
+    db1, db2, db3, db4 = st.columns(4)
+    with db1:
+        st.markdown(f"""<div class="kpi-card pur">
+            <div class="kpi-lbl">Reservation Total</div>
+            <div class="kpi-val blu">${db_total/1_000_000:.2f}M</div>
+            <div class="kpi-sub">MedInsight allocation</div>
+        </div>""", unsafe_allow_html=True)
+    with db2:
+        st.markdown(f"""<div class="kpi-card {'green' if db_pct_consumed >= 48 else 'ora'}">
+            <div class="kpi-lbl">Consumed to Date</div>
+            <div class="kpi-val {'grn' if db_pct_consumed >= 48 else 'ora'}">${db_consumed/1_000_000:.2f}M</div>
+            <div class="kpi-sub">{db_pct_consumed:.1f}% of reservation · {db_complete_days} days</div>
+        </div>""", unsafe_allow_html=True)
+    with db3:
+        st.markdown(f"""<div class="kpi-card {'red' if db_pct_remain > 52 else 'green'}">
+            <div class="kpi-lbl">Remaining</div>
+            <div class="kpi-val {'red' if db_pct_remain > 52 else 'grn'}">${db_remaining/1_000_000:.2f}M</div>
+            <div class="kpi-sub">{db_pct_remain:.1f}% remaining · {db_pending_days} days left</div>
+        </div>""", unsafe_allow_html=True)
+    with db4:
+        st.markdown(f"""<div class="kpi-card {'red' if curr_risk_label=='At Risk' else 'green'}">
+            <div class="kpi-lbl">Consumption Pace</div>
+            <div class="kpi-val" style="color:{curr_risk_color}">{curr_risk_label}</div>
+            <div class="kpi-sub">Avg ${db_avg_day:,.0f}/day · Need ${db_req_day:,.0f}/day</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+    # Gauge: consumption progress
+    db_gauge = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=db_pct_consumed,
+        number={"suffix": "%", "font": {"size": 32}},
+        delta={"reference": 50, "valueformat": ".1f", "suffix": "% vs 50% target"},
+        title={"text": "Reservation Consumed (%)", "font": {"size": 13}},
+        gauge={
+            "axis": {"range": [0, 100], "ticksuffix": "%"},
+            "bar": {"color": "#2563eb"},
+            "steps": [
+                {"range": [0, 40], "color": "#fee2e2"},
+                {"range": [40, 60], "color": "#fef9c3"},
+                {"range": [60, 100], "color": "#dcfce7"},
+            ],
+            "threshold": {
+                "line": {"color": "#dc2626", "width": 3},
+                "thickness": 0.75, "value": 50,
+            },
+        },
+    ))
+    db_gauge.update_layout(height=240, margin=dict(t=50, b=10, l=30, r=30),
+                           paper_bgcolor="#fff", font=dict(family="Inter, system-ui, sans-serif"))
+
+    dbc1, dbc2 = st.columns([1, 2])
+    with dbc1:
+        st.plotly_chart(db_gauge, use_container_width=True)
+
+    with dbc2:
+        # Projected vs required vs actual pace bar
+        proj_fig = go.Figure()
+        proj_fig.add_trace(go.Bar(
+            x=["Consumed to Date", "Projected at Current Pace", "Required to Use All"],
+            y=[db_consumed / 1_000_000, db_proj_curr / 1_000_000, db_proj_req / 1_000_000],
+            marker_color=["#2563eb", "#ea580c", "#16a34a"],
+            text=[f"${v/1_000_000:.2f}M" for v in [db_consumed, db_proj_curr, db_proj_req]],
+            textposition="outside",
+            hovertemplate="%{x}<br>$%{y:.2f}M<extra></extra>",
+        ))
+        proj_fig.add_hline(y=db_total / 1_000_000, line_dash="dot", line_color="#7c3aed",
+                           annotation_text=f"Reservation: ${db_total/1_000_000:.2f}M",
+                           annotation_position="bottom right")
+        proj_fig.update_layout(
+            plot_bgcolor="#fff", paper_bgcolor="#fff", height=240,
+            margin=dict(t=30, b=10, l=50, r=20),
+            yaxis=dict(showgrid=True, gridcolor="#f1f5f9", ticksuffix="M", tickfont=dict(size=11)),
+            xaxis=dict(tickfont=dict(size=11)), showlegend=False,
+            font=dict(family="Inter, system-ui, sans-serif"),
+            title=dict(text="Databricks Reservation: Consumed vs Projected", font=dict(size=12, color="#1e293b")),
+        )
+        st.plotly_chart(proj_fig, use_container_width=True)
+
+    st.markdown(f"""
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;
+            font-size:11px;color:#475569;display:flex;gap:24px;flex-wrap:wrap;">
+  <span>📅 <b>Data as of:</b> {latest_date_str}</span>
+  <span>📈 <b>Avg MoM growth (6m):</b> {avg_mom_6m:.1f}%</span>
+  <span>📊 <b>30-day spend change:</b> {'+' if var_30d_pct>0 else ''}{var_30d_pct:.1f}%</span>
+  <span>🎯 <b>Next 30d required:</b> ${db_next30/1000:.0f}K</span>
+  <span>⚡ <b>Daily avg consumed:</b> ${db_avg_day:,.0f}/day</span>
+  <span>⚡ <b>Daily required:</b> ${db_req_day:,.0f}/day</span>
+  <span style="color:{req_risk_color}"><b>Required pace:</b> {req_risk_label}</span>
+</div>
+""", unsafe_allow_html=True)
+else:
+    st.info("Databricks reservation metrics unavailable — KPI query returned no data.")
+
+st.markdown("---")
+
+
 # ── Detail table ───────────────────────────────────────────────────────────────
 st.markdown("<div class='section-label'>📋 12-Month Detail Table</div>", unsafe_allow_html=True)
 
@@ -829,6 +1127,144 @@ st.markdown(f"""
 st.markdown("---")
 
 
+# ── Internal vs Client split ───────────────────────────────────────────────────
+st.markdown("<div class='section-label'>🏢 Internal vs Client Subscription Forecast</div>", unsafe_allow_html=True)
+
+series_rows = meta.get("wls_series_rows", {})
+series_diag = meta.get("series_diag", {})
+
+def _r2_badge(r2):
+    if r2 is None: return ""
+    cls = "acc-good" if r2 >= 0.7 else "acc-ok" if r2 >= 0.4 else "acc-poor"
+    return f"<span class='acc-badge {cls}'>R² {r2:.2f}</span>"
+
+def _slope_str(k, series_diag):
+    d = series_diag.get(k)
+    if d is None: return ""
+    s = d["slope"]
+    arrow = "▲" if s > 0 else "▼"
+    color = "#dc2626" if s > 0 else "#16a34a"
+    return f"<span style='color:{color};font-size:10px;'>{arrow} ${abs(s)/1000:.1f}K/mo trend</span>"
+
+ic_col, sc_col = st.columns(2)
+for col_widget, series_key, series_name, color in [
+    (ic_col, "internal_cost", "Internal", "#2563eb"),
+    (sc_col, "client_cost",   "Client",   "#16a34a"),
+]:
+    with col_widget:
+        s_rows = series_rows.get(series_name, [])
+        diag   = series_diag.get(series_key)
+        r2     = diag["r2"]   if diag else None
+        rmse   = diag["rmse"] if diag else None
+        slope  = diag["slope"] if diag else None
+
+        if s_rows:
+            fig_ic = go.Figure()
+            act_x_ = [r["label"] for r in s_rows if r["type"] == "actual"]
+            act_y_ = [r["value"]/1000 for r in s_rows if r["type"] == "actual"]
+            fc_x_  = [r["label"] for r in s_rows if r["type"] in ("forecast", "current")]
+            fc_y_  = [r["value"]/1000 for r in s_rows if r["type"] in ("forecast", "current")]
+            if act_x_:
+                fig_ic.add_trace(go.Bar(x=act_x_, y=act_y_, name="Actual",
+                    marker_color=color, opacity=0.88,
+                    hovertemplate="%{x}<br>Actual: $%{y:.1f}K<extra></extra>"))
+            if fc_x_:
+                fig_ic.add_trace(go.Bar(x=fc_x_, y=fc_y_, name="Forecast",
+                    marker_color=color, opacity=0.45,
+                    hovertemplate="%{x}<br>Forecast: $%{y:.1f}K<extra></extra>"))
+            if rmse and fc_x_:
+                fig_ic.add_trace(go.Scatter(
+                    x=fc_x_ + fc_x_[::-1],
+                    y=[(v + rmse/1000) for v in fc_y_] + [(max(0, v - rmse/1000)) for v in fc_y_[::-1]],
+                    fill="toself", fillcolor=f"rgba(0,0,0,0.06)",
+                    line=dict(color="rgba(0,0,0,0)"), hoverinfo="skip", showlegend=False))
+
+            r2_title = f" · R² {r2:.2f}" if r2 is not None else ""
+            slope_title = f" · trend {'+' if slope and slope>0 else ''}{slope/1000:.1f}K/mo" if slope else ""
+            fig_ic.update_layout(
+                barmode="stack", plot_bgcolor="#fff", paper_bgcolor="#fff", height=260,
+                margin=dict(t=30, b=30, l=50, r=10),
+                title=dict(text=f"{series_name} Subscriptions{r2_title}{slope_title}", font=dict(size=12, color="#1e293b")),
+                legend=dict(orientation="h", yanchor="bottom", y=1.01, font=dict(size=10)),
+                xaxis=dict(showgrid=False, tickfont=dict(size=9)),
+                yaxis=dict(showgrid=True, gridcolor="#f1f5f9", ticksuffix="K", tickfont=dict(size=10)),
+                font=dict(family="Inter, system-ui, sans-serif"),
+            )
+            st.plotly_chart(fig_ic, use_container_width=True)
+
+# Key-category breakdown (Databricks, VM, Storage)
+st.markdown("<div class='section-label' style='margin-top:4px;'>🔬 Category Forecast — Databricks · VM · Storage (WLS trends)</div>", unsafe_allow_html=True)
+
+cat_colors = {"Databricks": "#7c3aed", "VM": "#ea580c", "Storage": "#0891b2"}
+cat_keys   = {"Databricks": "db_cost", "VM": "vm_cost", "Storage": "storage_cost"}
+c1, c2, c3 = st.columns(3)
+
+for col_widget, cat_name in [(c1, "Databricks"), (c2, "VM"), (c3, "Storage")]:
+    with col_widget:
+        s_rows = series_rows.get(cat_name, [])
+        k      = cat_keys[cat_name]
+        diag   = series_diag.get(k)
+        color  = cat_colors[cat_name]
+        r2     = diag["r2"]    if diag else None
+        rmse   = diag["rmse"]  if diag else None
+        slope  = diag["slope"] if diag else None
+
+        if s_rows:
+            fig_cat = go.Figure()
+            act_x_ = [r["label"] for r in s_rows if r["type"] == "actual"]
+            act_y_ = [r["value"]/1000 for r in s_rows if r["type"] == "actual"]
+            fc_x_  = [r["label"] for r in s_rows if r["type"] in ("forecast", "current")]
+            fc_y_  = [r["value"]/1000 for r in s_rows if r["type"] in ("forecast", "current")]
+            if act_x_:
+                fig_cat.add_trace(go.Bar(x=act_x_, y=act_y_, name="Actual",
+                    marker_color=color, opacity=0.88,
+                    hovertemplate="%{x}<br>Actual: $%{y:.1f}K<extra></extra>"))
+            if fc_x_:
+                fig_cat.add_trace(go.Bar(x=fc_x_, y=fc_y_, name="Forecast",
+                    marker_color=color, opacity=0.45,
+                    hovertemplate="%{x}<br>Forecast: $%{y:.1f}K<extra></extra>"))
+            r2_title = f" R²={r2:.2f}" if r2 is not None else ""
+            slope_title = f" {'+' if slope and slope>0 else ''}{slope/1000:.1f}K/mo" if slope else ""
+            fig_cat.update_layout(
+                barmode="stack", plot_bgcolor="#fff", paper_bgcolor="#fff", height=230,
+                margin=dict(t=30, b=30, l=45, r=10),
+                title=dict(text=f"{cat_name}{r2_title}{slope_title}", font=dict(size=11, color="#1e293b")),
+                showlegend=False,
+                xaxis=dict(showgrid=False, tickfont=dict(size=8)),
+                yaxis=dict(showgrid=True, gridcolor="#f1f5f9", ticksuffix="K", tickfont=dict(size=9)),
+                font=dict(family="Inter, system-ui, sans-serif"),
+            )
+            st.plotly_chart(fig_cat, use_container_width=True)
+
+# WLS R² summary pills
+diag_items = [
+    ("Total",       series_diag.get("total_cost")),
+    ("Internal",    series_diag.get("internal_cost")),
+    ("Client",      series_diag.get("client_cost")),
+    ("Databricks",  series_diag.get("db_cost")),
+    ("VM",          series_diag.get("vm_cost")),
+    ("Storage",     series_diag.get("storage_cost")),
+]
+pills = []
+for name, d in diag_items:
+    if d:
+        r2   = d["r2"]
+        rmse = d["rmse"]
+        slope = d["slope"]
+        q = "acc-good" if r2 >= 0.7 else "acc-ok" if r2 >= 0.4 else "acc-poor"
+        tr = f"{'+' if slope>0 else ''}{slope/1000:.1f}K/mo"
+        pills.append(f"<span class='acc-badge {q}' style='margin:3px;'>{name} R²={r2:.2f} · {tr} · RMSE ${rmse/1000:.0f}K</span>")
+
+if pills:
+    st.markdown(
+        "<div style='margin:8px 0 4px 0;font-size:11px;font-weight:600;color:#475569;'>WLS Model Quality</div>"
+        + "".join(pills),
+        unsafe_allow_html=True,
+    )
+
+st.markdown("---")
+
+
 # ── Year-end summary ───────────────────────────────────────────────────────────
 st.markdown("<div class='section-label'>📊 Year-End Summary</div>", unsafe_allow_html=True)
 
@@ -878,8 +1314,11 @@ with col_stats:
         <td style="text-align:right;font-weight:600;color:{'#dc2626' if over_under>0 else '#16a34a'}">
           {'+' if over_under>0 else ''}${over_under/1000:.0f}K</td></tr>
     <tr style="border-top:1px solid #f1f5f9">
-        <td style="color:#64748b;padding:5px 0">Run-Rate (rolling avg × 12)</td>
-        <td style="text-align:right;font-weight:600">${meta['rolling_avg']*12/1000:.0f}K</td></tr>
+        <td style="color:#64748b;padding:5px 0">WLS history</td>
+        <td style="text-align:right;font-weight:600">{meta['n_hist_months']} months</td></tr>
+    <tr style="border-top:1px solid #f1f5f9">
+        <td style="color:#64748b;padding:5px 0">3-mo rolling avg</td>
+        <td style="text-align:right;font-weight:600">${meta['rolling_avg']/1000:.0f}K/mo</td></tr>
     <tr style="border-top:1px solid #f1f5f9">
         <td style="color:#64748b;padding:5px 0">Daily Burn Rate</td>
         <td style="text-align:right;font-weight:600">${meta['current_burn']/1000:.2f}K/day</td></tr>
@@ -896,16 +1335,27 @@ with col_stats:
   </table>
 </div>""", unsafe_allow_html=True)
 
-    st.markdown("""
+    total_diag = meta.get("series_diag", {}).get("total_cost", {})
+    total_r2   = total_diag.get("r2", None) if total_diag else None
+    total_rmse = total_diag.get("rmse", None) if total_diag else None
+    r2_str     = f"{total_r2:.2f}" if total_r2 is not None else "N/A"
+    rmse_str   = f"${total_rmse/1000:.0f}K" if total_rmse else "N/A"
+    st.markdown(f"""
 <div class="method-box" style="margin-top:12px;">
-        <b>Data source — {resolved_dataset_name}</b><br>
-  <b>Table:</b> Azure_spend_Analysis · 6 columns · pre-aggregated in Fabric<br>
-  <b>Actuals:</b> SUM(total_cost) · complete_month ≠ "Incomplete"<br>
-  <b>Current MTD:</b> total_cost where complete_month = "Incomplete"<br>
-  <b>Daily burn:</b> MTD ÷ days_with_data<br>
-  <b>EOM projection:</b> MTD + burn × days remaining<br>
-        <b>Forecast:</b> weighted rolling-average business rule (configurable from sidebar)<br>
-        <b>Confidence band:</b> configurable base + month-out increment
+  <b>Data source — {resolved_dataset_name}</b><br>
+  <b>Table:</b> Azure_Expense_Details · Import mode (SQL MI source)<br>
+  <b>Actuals:</b> [Azure cost] measure · Complete_Month &ne; "Incomplete"<br>
+  <b>Current MTD:</b> [Azure cost] where Complete_Month = "Incomplete"<br>
+  <b>Daily burn:</b> MTD &divide; days elapsed in current month<br>
+  <b>EOM projection:</b> MTD + burn &times; days remaining<br>
+  <b>Forecast method:</b> Weighted Least Squares (WLS) regression — linear trend
+    y&nbsp;=&nbsp;a&nbsp;+&nbsp;b&times;t fitted across all {meta['n_hist_months']} completed months.
+    Quadratic weights w<sub>i</sub>&nbsp;=&nbsp;i&sup2; so recent months dominate.<br>
+  <b>Series fitted:</b> Total, Internal, Client, Databricks (MeterCategory), VM, Storage<br>
+  <b>Confidence bands:</b> &plusmn;RMSE of weighted residuals (data-driven, not fixed %).
+    Total model: R&sup2;&nbsp;=&nbsp;{r2_str}, RMSE&nbsp;=&nbsp;{rmse_str}<br>
+  <b>Internal vs Client:</b> Azure_Expense_Details[Client Name] = "MedInsight Internal" &rarr; Internal; all others &rarr; Client<br>
+  <b>Databricks:</b> live reservation KPIs from [MedInsight Azure DataBricks Reservations] measures
 </div>""", unsafe_allow_html=True)
 
 
@@ -913,6 +1363,6 @@ with col_stats:
 st.markdown(f"""
 <div class="dash-footer">
   <span>{completed_months} months actual · {forecast_months} months forecast · accuracy {str(acc_avg)+'%' if acc_avg else 'N/A'}</span>
-    <span>{resolved_dataset_name} · Dataset: {resolved_dataset_id[:8]}... · Cache: 5 min · Auto-refresh: 5 min</span>
+    <span>{resolved_dataset_name} · ID: {resolved_dataset_id[:8]}... · Import mode · Cache: 5 min · Auto-refresh: 5 min</span>
 </div>
 """, unsafe_allow_html=True)
