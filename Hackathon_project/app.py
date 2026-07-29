@@ -371,7 +371,7 @@ with st.sidebar:
                         st.markdown(prompt)
                     with st.chat_message("assistant"):
                         with st.spinner("Analyzing..."):
-                            data_context = get_data_summary(df, upcoming, filtered)
+                            data_context = get_data_summary(df, upcoming, upcoming)
                             response = ask_groq(prompt, data_context)
                             st.markdown(response)
                 st.session_state.chat_history.append({"role": "assistant", "content": response})
