@@ -620,11 +620,7 @@ if n_high > 0:
 else:
     st.info("No high-risk appointments in the selected filter range.")
 
-# ── AI CHATBOT ────────────────────────────────────────────────────────────────
-st.divider()
-st.subheader("🤖 No-Show Intelligence Assistant")
-st.caption("Ask questions about your appointment data, risk predictions, and no-show patterns.")
-
+# ── AI CHATBOT (Sidebar Dialog) ───────────────────────────────────────────────
 
 def get_data_summary(df_full, df_upcoming, df_filtered):
     """Build a concise data context for the chatbot."""
@@ -702,27 +698,40 @@ Format responses with bullet points or short paragraphs for readability.
         return f"Failed to reach Groq API: {str(e)}"
 
 
-if GROQ_API_KEY:
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+# Chatbot in sidebar triggered by button
+with st.sidebar:
+    st.divider()
+    if GROQ_API_KEY:
+        with st.expander("🤖 **No-Show Intelligence Assistant**", expanded=False):
+            st.caption("Ask about no-show patterns, risks, or recommendations")
 
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            if "chat_history" not in st.session_state:
+                st.session_state.chat_history = []
 
-    if prompt := st.chat_input("Ask about no-show patterns, risks, or recommendations..."):
-        st.session_state.chat_history.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+            chat_container = st.container(height=400)
+            with chat_container:
+                for msg in st.session_state.chat_history:
+                    with st.chat_message(msg["role"]):
+                        st.markdown(msg["content"])
 
-        with st.chat_message("assistant"):
-            with st.spinner("Analyzing..."):
-                data_context = get_data_summary(df, upcoming, filtered)
-                response = ask_groq(prompt, data_context)
-                st.markdown(response)
-        st.session_state.chat_history.append({"role": "assistant", "content": response})
-else:
-    st.info("💡 To enable the AI chatbot, add your Groq API key to Streamlit Secrets under `[groq]` → `api_key`.")
+            if prompt := st.chat_input("Ask a question...", key="sidebar_chat"):
+                st.session_state.chat_history.append({"role": "user", "content": prompt})
+                with chat_container:
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
+                    with st.chat_message("assistant"):
+                        with st.spinner("Analyzing..."):
+                            data_context = get_data_summary(df, upcoming, filtered)
+                            response = ask_groq(prompt, data_context)
+                            st.markdown(response)
+                st.session_state.chat_history.append({"role": "assistant", "content": response})
+
+            if st.session_state.chat_history:
+                if st.button("🗑️ Clear Chat", use_container_width=True):
+                    st.session_state.chat_history = []
+                    st.rerun()
+    else:
+        st.info("💡 Add Groq API key to enable AI chatbot.")
 
 
 # ── FOOTER ─────────────────────────────────────────────────────────────────────
