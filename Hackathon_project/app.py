@@ -37,8 +37,8 @@ CLIENT_SECRET = st.secrets.get("azure", {}).get("client_secret", os.getenv("CLIE
 WORKSPACE_NAME = "Clinical No-Show Prediction - Infinity Nexus"
 DATASET_NAME   = "Appointment and Patient data"
 
-# Gemini AI Chatbot
-GEMINI_API_KEY = st.secrets.get("gemini", {}).get("api_key", os.getenv("GEMINI_API_KEY", ""))
+# AI Chatbot (Groq - free tier, runs Llama models)
+GROQ_API_KEY = st.secrets.get("groq", {}).get("api_key", os.getenv("GROQ_API_KEY", ""))
 
 st.set_page_config(
     page_title="Clinical No-Show Prediction",
@@ -664,9 +664,9 @@ def get_data_summary(df_full, df_upcoming, df_filtered):
 """
 
 
-def ask_gemini(question, data_context):
-    """Send a question to Google Gemini API and return the response."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+def ask_groq(question, data_context):
+    """Send a question to Groq API (Llama 3.1 8B) and return the response."""
+    url = "https://api.groq.com/openai/v1/chat/completions"
 
     system_prompt = f"""You are a clinical operations AI assistant embedded in a No-Show Prediction Dashboard.
 You help healthcare coordinators understand patient no-show patterns, risk predictions, and operational strategies.
@@ -677,28 +677,32 @@ Format responses with bullet points or short paragraphs for readability.
 
 {data_context}"""
 
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json",
+    }
     payload = {
-        "contents": [
-            {"role": "user", "parts": [{"text": system_prompt + "\n\nUser question: " + question}]}
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question},
         ],
-        "generationConfig": {
-            "temperature": 0.3,
-            "maxOutputTokens": 1024,
-        }
+        "temperature": 0.3,
+        "max_tokens": 1024,
     }
 
     try:
-        resp = requests.post(url, json=payload, timeout=30)
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
         if resp.status_code == 200:
             result = resp.json()
-            return result["candidates"][0]["content"]["parts"][0]["text"]
+            return result["choices"][0]["message"]["content"]
         else:
-            return f"Error from Gemini API: {resp.status_code} — {resp.text[:200]}"
+            return f"Error from Groq API: {resp.status_code} — {resp.text[:200]}"
     except Exception as e:
-        return f"Failed to reach Gemini API: {str(e)}"
+        return f"Failed to reach Groq API: {str(e)}"
 
 
-if GEMINI_API_KEY:
+if GROQ_API_KEY:
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
@@ -714,11 +718,11 @@ if GEMINI_API_KEY:
         with st.chat_message("assistant"):
             with st.spinner("Analyzing..."):
                 data_context = get_data_summary(df, upcoming, filtered)
-                response = ask_gemini(prompt, data_context)
+                response = ask_groq(prompt, data_context)
                 st.markdown(response)
         st.session_state.chat_history.append({"role": "assistant", "content": response})
 else:
-    st.info("💡 To enable the AI chatbot, add your Gemini API key to Streamlit Secrets under `[gemini]` → `api_key`.")
+    st.info("💡 To enable the AI chatbot, add your Groq API key to Streamlit Secrets under `[groq]` → `api_key`.")
 
 
 # ── FOOTER ─────────────────────────────────────────────────────────────────────
