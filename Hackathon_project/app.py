@@ -666,7 +666,7 @@ def get_data_summary(df_full, df_upcoming, df_filtered):
 
 def ask_gemini(question, data_context):
     """Send a question to Google Gemini API and return the response."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
     system_prompt = f"""You are a clinical operations AI assistant embedded in a No-Show Prediction Dashboard.
 You help healthcare coordinators understand patient no-show patterns, risk predictions, and operational strategies.
