@@ -359,6 +359,23 @@ def get_data_summary(df_full, df_upcoming, df_filtered):
 
     insurance_noshow = df_full[df_full["status"].isin(["Completed", "No Show"])].groupby("insurance_type")["is_noshow"].mean().to_dict()
 
+    # Build patient-level detail for high and medium risk
+    patient_details = ""
+    if "noshow_pct" in df_filtered.columns and len(df_filtered) > 0:
+        risk_df = df_filtered.sort_values("noshow_probability", ascending=False).head(50)
+        rows = []
+        for _, r in risk_df.iterrows():
+            name = f"{r.get('first_name', '')} {r.get('last_name', '')}".strip()
+            date = pd.to_datetime(r.get("appointment_date_parsed")).strftime("%Y-%m-%d") if pd.notna(r.get("appointment_date_parsed")) else "N/A"
+            cat = r.get("appointment_category", "N/A")
+            reason = r.get("reason_for_visit", "N/A")
+            risk_pct = r.get("noshow_pct", 0)
+            tier = r.get("risk_tier", "N/A")
+            insurance = r.get("insurance_type", "N/A")
+            distance = r.get("distance_to_clinic_miles", 0)
+            rows.append(f"  - {name} | Date: {date} | Category: {cat} | Reason: {reason} | Risk: {risk_pct}% ({tier}) | Insurance: {insurance} | Distance: {distance} mi")
+        patient_details = "\n".join(rows)
+
     return f"""CLINICAL NO-SHOW PREDICTION DATA SUMMARY:
 - Total historical appointments: {total_appts:,}
 - Total unique patients: {total_patients:,}
@@ -376,6 +393,9 @@ def get_data_summary(df_full, df_upcoming, df_filtered):
 - Risk thresholds: Low <30%, Medium 30-70%, High >70%
 - Intervention strategy: High Risk = manual callback + overbooking, Medium = interactive SMS/Email, Low = standard 24hr SMS
 - Key model features (by importance): {json.dumps({k: f'{v:.3f}' for k,v in sorted(feat_imp.items(), key=lambda x: -x[1])[:5]})}
+
+UPCOMING APPOINTMENTS (Top 50 by risk, highest first):
+{patient_details}
 """
 
 
