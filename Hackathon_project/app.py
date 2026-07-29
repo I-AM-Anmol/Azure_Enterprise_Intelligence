@@ -81,7 +81,7 @@ def get_dataset_id(_token):
         st.stop()
 
     groups = resp.json().get("value", [])
-    workspace = next((g for g in groups if g["name"] == WORKSPACE_NAME), None)
+    workspace = next((g for g in groups if g["name"].strip() == WORKSPACE_NAME), None)
     if not workspace:
         st.error(f"Workspace '{WORKSPACE_NAME}' not found. Available: {[g['name'] for g in groups]}")
         st.stop()
@@ -95,7 +95,7 @@ def get_dataset_id(_token):
         st.stop()
 
     datasets = resp.json().get("value", [])
-    dataset = next((d for d in datasets if d["name"] == DATASET_NAME), None)
+    dataset = next((d for d in datasets if d["name"].strip() == DATASET_NAME), None)
     if not dataset:
         st.error(f"Dataset '{DATASET_NAME}' not found. Available: {[d['name'] for d in datasets]}")
         st.stop()
