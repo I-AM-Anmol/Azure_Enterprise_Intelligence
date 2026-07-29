@@ -58,7 +58,12 @@ def get_access_token():
     }
     response = requests.post(url, data=payload)
     if response.status_code != 200:
-        st.error(f"Authentication failed: {response.json().get('error_description', response.text)}")
+        try:
+            err_msg = response.json().get("error_description", response.text)
+        except Exception:
+            err_msg = response.text or f"HTTP {response.status_code} (empty response)"
+        st.error(f"Authentication failed: {err_msg}")
+        st.info("Please configure TENANT_ID, CLIENT_ID, and CLIENT_SECRET in Streamlit Cloud Secrets (Settings → Secrets).")
         st.stop()
     return response.json()["access_token"]
 
