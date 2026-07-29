@@ -339,6 +339,85 @@ else:
     upcoming["risk_tier"] = []
 
 # ─────────────────────────────────────────────────────────────────────────────
+# CHATBOT HELPER FUNCTIONS
+# ─────────────────────────────────────────────────────────────────────────────
+def get_data_summary(df_full, df_upcoming, df_filtered):
+    """Build a concise data context for the chatbot."""
+    total_appts = len(df_full)
+    total_patients = df_full["patient_id"].nunique()
+    upcoming_count = len(df_upcoming)
+    hist_noshow_rate = df_full[df_full["status"].isin(["Completed", "No Show"])]["is_noshow"].mean() * 100
+
+    high = len(df_filtered[df_filtered["risk_tier"] == "High Risk"]) if "risk_tier" in df_filtered.columns else 0
+    med = len(df_filtered[df_filtered["risk_tier"] == "Medium Risk"]) if "risk_tier" in df_filtered.columns else 0
+    low = len(df_filtered[df_filtered["risk_tier"] == "Low Risk"]) if "risk_tier" in df_filtered.columns else 0
+
+    top_noshow_days = df_full[df_full["is_noshow"] == 1]["day_name"].value_counts().head(3).to_dict()
+    top_noshow_categories = df_full[df_full["is_noshow"] == 1]["appointment_category"].value_counts().head(5).to_dict()
+    avg_distance_high = df_filtered[df_filtered["risk_tier"] == "High Risk"]["distance_to_clinic_miles"].mean() if high > 0 else 0
+    avg_distance_low = df_filtered[df_filtered["risk_tier"] == "Low Risk"]["distance_to_clinic_miles"].mean() if low > 0 else 0
+
+    insurance_noshow = df_full[df_full["status"].isin(["Completed", "No Show"])].groupby("insurance_type")["is_noshow"].mean().to_dict()
+
+    return f"""CLINICAL NO-SHOW PREDICTION DATA SUMMARY:
+- Total historical appointments: {total_appts:,}
+- Total unique patients: {total_patients:,}
+- Upcoming scheduled appointments: {upcoming_count:,}
+- Historical no-show rate: {hist_noshow_rate:.1f}%
+- Model AUC: {auc_score:.3f}
+- Current risk distribution: High={high}, Medium={med}, Low={low}
+- Estimated revenue at risk: ${(high*0.78 + med*0.48 + low*0.15) * AVG_APPOINTMENT_REVENUE:,.0f}
+- Top no-show days: {top_noshow_days}
+- Top no-show categories: {top_noshow_categories}
+- Avg distance (High Risk): {avg_distance_high:.1f} miles
+- Avg distance (Low Risk): {avg_distance_low:.1f} miles
+- No-show rate by insurance: {json.dumps({k: f'{v*100:.1f}%' for k,v in insurance_noshow.items()})}
+- Average appointment revenue: ${AVG_APPOINTMENT_REVENUE}
+- Risk thresholds: Low <30%, Medium 30-70%, High >70%
+- Intervention strategy: High Risk = manual callback + overbooking, Medium = interactive SMS/Email, Low = standard 24hr SMS
+- Key model features (by importance): {json.dumps({k: f'{v:.3f}' for k,v in sorted(feat_imp.items(), key=lambda x: -x[1])[:5]})}
+"""
+
+
+def ask_groq(question, data_context):
+    """Send a question to Groq API (Llama 3.1 8B) and return the response."""
+    url = "https://api.groq.com/openai/v1/chat/completions"
+
+    system_prompt = f"""You are a clinical operations AI assistant embedded in a No-Show Prediction Dashboard.
+You help healthcare coordinators understand patient no-show patterns, risk predictions, and operational strategies.
+
+Answer questions based on the data below. Be concise, actionable, and specific. Use numbers from the data.
+If asked about a specific patient or scenario not in the summary, explain what data you'd need.
+Format responses with bullet points or short paragraphs for readability.
+
+{data_context}"""
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 1024,
+    }
+
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        if resp.status_code == 200:
+            result = resp.json()
+            return result["choices"][0]["message"]["content"]
+        else:
+            return f"Error from Groq API: {resp.status_code} — {resp.text[:200]}"
+    except Exception as e:
+        return f"Failed to reach Groq API: {str(e)}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -653,82 +732,6 @@ if n_high > 0:
 else:
     st.info("No high-risk appointments in the selected filter range.")
 
-# ── AI CHATBOT (Sidebar Dialog) ───────────────────────────────────────────────
-
-def get_data_summary(df_full, df_upcoming, df_filtered):
-    """Build a concise data context for the chatbot."""
-    total_appts = len(df_full)
-    total_patients = df_full["patient_id"].nunique()
-    upcoming_count = len(df_upcoming)
-    hist_noshow_rate = df_full[df_full["status"].isin(["Completed", "No Show"])]["is_noshow"].mean() * 100
-
-    high = len(df_filtered[df_filtered["risk_tier"] == "High Risk"]) if "risk_tier" in df_filtered.columns else 0
-    med = len(df_filtered[df_filtered["risk_tier"] == "Medium Risk"]) if "risk_tier" in df_filtered.columns else 0
-    low = len(df_filtered[df_filtered["risk_tier"] == "Low Risk"]) if "risk_tier" in df_filtered.columns else 0
-
-    top_noshow_days = df_full[df_full["is_noshow"] == 1]["day_name"].value_counts().head(3).to_dict()
-    top_noshow_categories = df_full[df_full["is_noshow"] == 1]["appointment_category"].value_counts().head(5).to_dict()
-    avg_distance_high = df_filtered[df_filtered["risk_tier"] == "High Risk"]["distance_to_clinic_miles"].mean() if high > 0 else 0
-    avg_distance_low = df_filtered[df_filtered["risk_tier"] == "Low Risk"]["distance_to_clinic_miles"].mean() if low > 0 else 0
-
-    insurance_noshow = df_full[df_full["status"].isin(["Completed", "No Show"])].groupby("insurance_type")["is_noshow"].mean().to_dict()
-
-    return f"""CLINICAL NO-SHOW PREDICTION DATA SUMMARY:
-- Total historical appointments: {total_appts:,}
-- Total unique patients: {total_patients:,}
-- Upcoming scheduled appointments: {upcoming_count:,}
-- Historical no-show rate: {hist_noshow_rate:.1f}%
-- Model AUC: {auc_score:.3f}
-- Current risk distribution: High={high}, Medium={med}, Low={low}
-- Estimated revenue at risk: ${(high*0.78 + med*0.48 + low*0.15) * AVG_APPOINTMENT_REVENUE:,.0f}
-- Top no-show days: {top_noshow_days}
-- Top no-show categories: {top_noshow_categories}
-- Avg distance (High Risk): {avg_distance_high:.1f} miles
-- Avg distance (Low Risk): {avg_distance_low:.1f} miles
-- No-show rate by insurance: {json.dumps({k: f'{v*100:.1f}%' for k,v in insurance_noshow.items()})}
-- Average appointment revenue: ${AVG_APPOINTMENT_REVENUE}
-- Risk thresholds: Low <30%, Medium 30-70%, High >70%
-- Intervention strategy: High Risk = manual callback + overbooking, Medium = interactive SMS/Email, Low = standard 24hr SMS
-- Key model features (by importance): {json.dumps({k: f'{v:.3f}' for k,v in sorted(feat_imp.items(), key=lambda x: -x[1])[:5]})}
-"""
-
-
-def ask_groq(question, data_context):
-    """Send a question to Groq API (Llama 3.1 8B) and return the response."""
-    url = "https://api.groq.com/openai/v1/chat/completions"
-
-    system_prompt = f"""You are a clinical operations AI assistant embedded in a No-Show Prediction Dashboard.
-You help healthcare coordinators understand patient no-show patterns, risk predictions, and operational strategies.
-
-Answer questions based on the data below. Be concise, actionable, and specific. Use numbers from the data.
-If asked about a specific patient or scenario not in the summary, explain what data you'd need.
-Format responses with bullet points or short paragraphs for readability.
-
-{data_context}"""
-
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": question},
-        ],
-        "temperature": 0.3,
-        "max_tokens": 1024,
-    }
-
-    try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=30)
-        if resp.status_code == 200:
-            result = resp.json()
-            return result["choices"][0]["message"]["content"]
-        else:
-            return f"Error from Groq API: {resp.status_code} — {resp.text[:200]}"
-    except Exception as e:
-        return f"Failed to reach Groq API: {str(e)}"
 
 
 
