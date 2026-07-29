@@ -345,6 +345,44 @@ with st.sidebar:
     st.image("https://img.icons8.com/color/96/hospital-3.png", width=60)
     st.title("No-Show Predictor")
     st.caption("Clinical Appointment Intelligence")
+
+    # Refresh & Chatbot — right under the title
+    if st.button("🔄 Refresh Data from Model", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+
+    if GROQ_API_KEY:
+        with st.expander("🤖 **No-Show Intelligence Assistant**", expanded=False):
+            st.caption("Ask about no-show patterns, risks, or recommendations")
+
+            if "chat_history" not in st.session_state:
+                st.session_state.chat_history = []
+
+            chat_container = st.container(height=400)
+            with chat_container:
+                for msg in st.session_state.chat_history:
+                    with st.chat_message(msg["role"]):
+                        st.markdown(msg["content"])
+
+            if prompt := st.chat_input("Ask a question...", key="sidebar_chat"):
+                st.session_state.chat_history.append({"role": "user", "content": prompt})
+                with chat_container:
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
+                    with st.chat_message("assistant"):
+                        with st.spinner("Analyzing..."):
+                            data_context = get_data_summary(df, upcoming, filtered)
+                            response = ask_groq(prompt, data_context)
+                            st.markdown(response)
+                st.session_state.chat_history.append({"role": "assistant", "content": response})
+
+            if st.session_state.chat_history:
+                if st.button("🗑️ Clear Chat", use_container_width=True):
+                    st.session_state.chat_history = []
+                    st.rerun()
+    else:
+        st.info("💡 Add Groq API key to enable AI chatbot.")
+
     st.divider()
 
     st.metric("Model AUC Score", f"{auc_score:.3f}")
@@ -384,11 +422,6 @@ with st.sidebar:
     )
     st.dataframe(imp_df, hide_index=True, use_container_width=True)
 
-    # Refresh button
-    st.divider()
-    if st.button("🔄 Refresh Data from Model"):
-        st.cache_data.clear()
-        st.rerun()
 
 # Apply filters
 filtered = upcoming.copy()
@@ -698,40 +731,6 @@ Format responses with bullet points or short paragraphs for readability.
         return f"Failed to reach Groq API: {str(e)}"
 
 
-# Chatbot in sidebar triggered by button
-with st.sidebar:
-    st.divider()
-    if GROQ_API_KEY:
-        with st.expander("🤖 **No-Show Intelligence Assistant**", expanded=False):
-            st.caption("Ask about no-show patterns, risks, or recommendations")
-
-            if "chat_history" not in st.session_state:
-                st.session_state.chat_history = []
-
-            chat_container = st.container(height=400)
-            with chat_container:
-                for msg in st.session_state.chat_history:
-                    with st.chat_message(msg["role"]):
-                        st.markdown(msg["content"])
-
-            if prompt := st.chat_input("Ask a question...", key="sidebar_chat"):
-                st.session_state.chat_history.append({"role": "user", "content": prompt})
-                with chat_container:
-                    with st.chat_message("user"):
-                        st.markdown(prompt)
-                    with st.chat_message("assistant"):
-                        with st.spinner("Analyzing..."):
-                            data_context = get_data_summary(df, upcoming, filtered)
-                            response = ask_groq(prompt, data_context)
-                            st.markdown(response)
-                st.session_state.chat_history.append({"role": "assistant", "content": response})
-
-            if st.session_state.chat_history:
-                if st.button("🗑️ Clear Chat", use_container_width=True):
-                    st.session_state.chat_history = []
-                    st.rerun()
-    else:
-        st.info("💡 Add Groq API key to enable AI chatbot.")
 
 
 # ── FOOTER ─────────────────────────────────────────────────────────────────────
