@@ -16,6 +16,7 @@ import pandas as pd
 import numpy as np
 import requests
 import os
+import json
 from datetime import datetime, timedelta
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
@@ -35,6 +36,9 @@ CLIENT_ID     = st.secrets.get("azure", {}).get("client_id", os.getenv("CLIENT_I
 CLIENT_SECRET = st.secrets.get("azure", {}).get("client_secret", os.getenv("CLIENT_SECRET", ""))
 WORKSPACE_NAME = "Clinical No-Show Prediction - Infinity Nexus"
 DATASET_NAME   = "Appointment and Patient data"
+
+# Gemini AI Chatbot
+GEMINI_API_KEY = st.secrets.get("gemini", {}).get("api_key", os.getenv("GEMINI_API_KEY", ""))
 
 st.set_page_config(
     page_title="Clinical No-Show Prediction",
@@ -615,6 +619,107 @@ if n_high > 0:
     st.dataframe(dist_comparison.T, use_container_width=True)
 else:
     st.info("No high-risk appointments in the selected filter range.")
+
+# ── AI CHATBOT ────────────────────────────────────────────────────────────────
+st.divider()
+st.subheader("🤖 No-Show Intelligence Assistant")
+st.caption("Ask questions about your appointment data, risk predictions, and no-show patterns.")
+
+
+def get_data_summary(df_full, df_upcoming, df_filtered):
+    """Build a concise data context for the chatbot."""
+    total_appts = len(df_full)
+    total_patients = df_full["patient_id"].nunique()
+    upcoming_count = len(df_upcoming)
+    hist_noshow_rate = df_full[df_full["status"].isin(["Completed", "No Show"])]["is_noshow"].mean() * 100
+
+    high = len(df_filtered[df_filtered["risk_tier"] == "High Risk"]) if "risk_tier" in df_filtered.columns else 0
+    med = len(df_filtered[df_filtered["risk_tier"] == "Medium Risk"]) if "risk_tier" in df_filtered.columns else 0
+    low = len(df_filtered[df_filtered["risk_tier"] == "Low Risk"]) if "risk_tier" in df_filtered.columns else 0
+
+    top_noshow_days = df_full[df_full["is_noshow"] == 1]["day_name"].value_counts().head(3).to_dict()
+    top_noshow_categories = df_full[df_full["is_noshow"] == 1]["appointment_category"].value_counts().head(5).to_dict()
+    avg_distance_high = df_filtered[df_filtered["risk_tier"] == "High Risk"]["distance_to_clinic_miles"].mean() if high > 0 else 0
+    avg_distance_low = df_filtered[df_filtered["risk_tier"] == "Low Risk"]["distance_to_clinic_miles"].mean() if low > 0 else 0
+
+    insurance_noshow = df_full[df_full["status"].isin(["Completed", "No Show"])].groupby("insurance_type")["is_noshow"].mean().to_dict()
+
+    return f"""CLINICAL NO-SHOW PREDICTION DATA SUMMARY:
+- Total historical appointments: {total_appts:,}
+- Total unique patients: {total_patients:,}
+- Upcoming scheduled appointments: {upcoming_count:,}
+- Historical no-show rate: {hist_noshow_rate:.1f}%
+- Model AUC: {auc_score:.3f}
+- Current risk distribution: High={high}, Medium={med}, Low={low}
+- Estimated revenue at risk: ${(high*0.78 + med*0.48 + low*0.15) * AVG_APPOINTMENT_REVENUE:,.0f}
+- Top no-show days: {top_noshow_days}
+- Top no-show categories: {top_noshow_categories}
+- Avg distance (High Risk): {avg_distance_high:.1f} miles
+- Avg distance (Low Risk): {avg_distance_low:.1f} miles
+- No-show rate by insurance: {json.dumps({k: f'{v*100:.1f}%' for k,v in insurance_noshow.items()})}
+- Average appointment revenue: ${AVG_APPOINTMENT_REVENUE}
+- Risk thresholds: Low <30%, Medium 30-70%, High >70%
+- Intervention strategy: High Risk = manual callback + overbooking, Medium = interactive SMS/Email, Low = standard 24hr SMS
+- Key model features (by importance): {json.dumps({k: f'{v:.3f}' for k,v in sorted(feat_imp.items(), key=lambda x: -x[1])[:5]})}
+"""
+
+
+def ask_gemini(question, data_context):
+    """Send a question to Google Gemini API and return the response."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+
+    system_prompt = f"""You are a clinical operations AI assistant embedded in a No-Show Prediction Dashboard.
+You help healthcare coordinators understand patient no-show patterns, risk predictions, and operational strategies.
+
+Answer questions based on the data below. Be concise, actionable, and specific. Use numbers from the data.
+If asked about a specific patient or scenario not in the summary, explain what data you'd need.
+Format responses with bullet points or short paragraphs for readability.
+
+{data_context}"""
+
+    payload = {
+        "contents": [
+            {"role": "user", "parts": [{"text": system_prompt + "\n\nUser question: " + question}]}
+        ],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 1024,
+        }
+    }
+
+    try:
+        resp = requests.post(url, json=payload, timeout=30)
+        if resp.status_code == 200:
+            result = resp.json()
+            return result["candidates"][0]["content"]["parts"][0]["text"]
+        else:
+            return f"Error from Gemini API: {resp.status_code} — {resp.text[:200]}"
+    except Exception as e:
+        return f"Failed to reach Gemini API: {str(e)}"
+
+
+if GEMINI_API_KEY:
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    if prompt := st.chat_input("Ask about no-show patterns, risks, or recommendations..."):
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing..."):
+                data_context = get_data_summary(df, upcoming, filtered)
+                response = ask_gemini(prompt, data_context)
+                st.markdown(response)
+        st.session_state.chat_history.append({"role": "assistant", "content": response})
+else:
+    st.info("💡 To enable the AI chatbot, add your Gemini API key to Streamlit Secrets under `[gemini]` → `api_key`.")
+
 
 # ── FOOTER ─────────────────────────────────────────────────────────────────────
 st.divider()
