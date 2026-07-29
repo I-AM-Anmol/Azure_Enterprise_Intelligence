@@ -2,10 +2,11 @@
 Clinical No-Show Prediction Dashboard
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Streamlit app that:
-  1. Trains a no-show prediction model on historical data
-  2. Scores all upcoming scheduled appointments
-  3. Stratifies risk into Low/Medium/High tiers
-  4. Displays actionable operational dashboard for clinic coordinators
+  1. Connects to Power BI semantic model via Service Principal
+  2. Pulls appointment + patient data using DAX queries
+  3. Trains a no-show prediction model on historical data
+  4. Scores upcoming scheduled appointments
+  5. Displays actionable operational dashboard for clinic coordinators
 
 Run:  streamlit run app.py
 """
@@ -13,19 +14,27 @@ Run:  streamlit run app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
+import requests
+import os
 from datetime import datetime, timedelta
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_auc_score, classification_report
+from sklearn.metrics import roc_auc_score
 import warnings
 warnings.filterwarnings("ignore")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
-DATA_DIR = r"C:\Users\anmol.sharma\Desktop\2026 Hackathon work"
 AVG_APPOINTMENT_REVENUE = 250  # USD lost per no-show
-TODAY = pd.Timestamp("2026-07-29")
+TODAY = pd.Timestamp.now().normalize()
+
+# Power BI connection settings (from Streamlit secrets or env vars)
+TENANT_ID     = st.secrets.get("TENANT_ID",     os.getenv("TENANT_ID", ""))
+CLIENT_ID     = st.secrets.get("CLIENT_ID",     os.getenv("CLIENT_ID", ""))
+CLIENT_SECRET = st.secrets.get("CLIENT_SECRET", os.getenv("CLIENT_SECRET", ""))
+WORKSPACE_NAME = "Clinical No-Show Prediction - Infinity Nexus"
+DATASET_NAME   = "Appointment and Patient data"
 
 st.set_page_config(
     page_title="Clinical No-Show Prediction",
@@ -35,54 +44,183 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LOAD DATA
+# POWER BI AUTHENTICATION & DAX QUERY ENGINE
 # ─────────────────────────────────────────────────────────────────────────────
-@st.cache_data
+@st.cache_data(ttl=3600)
+def get_access_token():
+    """Get Azure AD token for Power BI API using Service Principal."""
+    url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
+    payload = {
+        "grant_type": "client_credentials",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "scope": "https://analysis.windows.net/powerbi/api/.default",
+    }
+    response = requests.post(url, data=payload)
+    if response.status_code != 200:
+        st.error(f"Authentication failed: {response.json().get('error_description', response.text)}")
+        st.stop()
+    return response.json()["access_token"]
+
+
+@st.cache_data(ttl=3600)
+def get_dataset_id(_token):
+    """Resolve workspace and dataset IDs from names."""
+    headers = {"Authorization": f"Bearer {_token}"}
+
+    # Get workspace (group) ID
+    groups_url = "https://api.powerbi.com/v1.0/myorg/groups"
+    resp = requests.get(groups_url, headers=headers)
+    if resp.status_code != 200:
+        st.error(f"Failed to list workspaces: {resp.text}")
+        st.stop()
+
+    groups = resp.json().get("value", [])
+    workspace = next((g for g in groups if g["name"] == WORKSPACE_NAME), None)
+    if not workspace:
+        st.error(f"Workspace '{WORKSPACE_NAME}' not found. Available: {[g['name'] for g in groups]}")
+        st.stop()
+    workspace_id = workspace["id"]
+
+    # Get dataset ID
+    datasets_url = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets"
+    resp = requests.get(datasets_url, headers=headers)
+    if resp.status_code != 200:
+        st.error(f"Failed to list datasets: {resp.text}")
+        st.stop()
+
+    datasets = resp.json().get("value", [])
+    dataset = next((d for d in datasets if d["name"] == DATASET_NAME), None)
+    if not dataset:
+        st.error(f"Dataset '{DATASET_NAME}' not found. Available: {[d['name'] for d in datasets]}")
+        st.stop()
+
+    return workspace_id, dataset["id"]
+
+
+def execute_dax(token, workspace_id, dataset_id, dax_query):
+    """Execute a DAX query against the semantic model and return a DataFrame."""
+    url = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets/{dataset_id}/executeQueries"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "queries": [{"query": dax_query}],
+        "serializerSettings": {"includeNulls": True},
+    }
+    resp = requests.post(url, headers=headers, json=body)
+    if resp.status_code != 200:
+        st.error(f"DAX query failed: {resp.text}")
+        return pd.DataFrame()
+
+    result = resp.json()
+    rows = result["results"][0]["tables"][0]["rows"]
+    return pd.DataFrame(rows)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOAD DATA FROM SEMANTIC MODEL
+# ─────────────────────────────────────────────────────────────────────────────
+@st.cache_data(ttl=600)
 def load_data():
-    appt = pd.read_csv(f"{DATA_DIR}/staging_appointment.csv", low_memory=False)
-    pat  = pd.read_csv(f"{DATA_DIR}/staging_patient.csv", low_memory=False)
+    """Pull appointment and patient data from the Power BI semantic model."""
 
-    # deduplicate patient rows — keep latest updated_at per patient_id
-    pat = pat.sort_values("updated_at", ascending=False).drop_duplicates(
-        subset=["patient_id"], keep="first"
-    ).reset_index(drop=True)
+    token = get_access_token()
+    workspace_id, dataset_id = get_dataset_id(token)
 
-    # merge
+    # DAX: Get all appointments with prediction-relevant columns
+    appt_dax = """
+    EVALUATE
+    SELECTCOLUMNS(
+        staging_appointment,
+        "appointment_id", [appointment_id],
+        "patient_id", [patient_id],
+        "appointment_date", [appointment_date],
+        "appointment_time", [appointment_time],
+        "appointment_duration", [appointment_duration],
+        "created_date", [created_date],
+        "status", [status],
+        "appointment_category", [appointment_category],
+        "appointment_subcategory", [appointment_subcategory],
+        "reason_for_visit", [reason_for_visit],
+        "cancellation_reason", [cancellation_reason],
+        "department_id", [department_id],
+        "requires_in_person", [requires_in_person],
+        "prediction_eligible", [prediction_eligible]
+    )
+    """
+
+    # DAX: Get patient demographics + model features
+    patient_dax = """
+    EVALUATE
+    SELECTCOLUMNS(
+        staging_patient,
+        "patient_id", [patient_id],
+        "first_name", [first_name],
+        "last_name", [last_name],
+        "date_of_birth", [date_of_birth],
+        "gender", [gender],
+        "sex", [sex],
+        "race", [race],
+        "ethnicity", [ethnicity],
+        "primary_language", [primary_language],
+        "city", [city],
+        "state", [state],
+        "zip_code", [zip_code],
+        "insurance_type", [insurance_type],
+        "sms_reminder_enrolled", [sms_reminder_enrolled],
+        "distance_to_clinic_miles", [distance_to_clinic_miles],
+        "preferred_communication_method", [preferred_communication_method]
+    )
+    """
+
+    appt = execute_dax(token, workspace_id, dataset_id, appt_dax)
+    pat  = execute_dax(token, workspace_id, dataset_id, patient_dax)
+
+    if appt.empty or pat.empty:
+        st.error("Failed to load data from semantic model.")
+        st.stop()
+
+    # Clean column names (DAX may prefix with table name)
+    appt.columns = [c.split("[")[-1].rstrip("]") if "[" in c else c for c in appt.columns]
+    pat.columns  = [c.split("[")[-1].rstrip("]") if "[" in c else c for c in pat.columns]
+
+    # Deduplicate patients — keep one row per patient_id
+    pat = pat.drop_duplicates(subset=["patient_id"], keep="first").reset_index(drop=True)
+
+    # Merge
     df = appt.merge(pat, on="patient_id", how="left", suffixes=("", "_pat"))
 
-    # parse dates (normalize all to tz-naive)
+    # Parse dates (normalize all to tz-naive)
     df["appointment_date_parsed"] = pd.to_datetime(
-        df["appointment_date"].replace("-", pd.NaT), errors="coerce", utc=True
+        df["appointment_date"], errors="coerce", utc=True
     ).dt.tz_localize(None)
     df["created_date_parsed"] = pd.to_datetime(
         df["created_date"], errors="coerce", utc=True
     ).dt.tz_localize(None)
 
-    # derived features
+    # Derived features
     df["lead_days"] = (
         df["appointment_date_parsed"] - df["created_date_parsed"]
     ).dt.days.clip(lower=0)
 
-    df["day_of_week"] = df["appointment_date_parsed"].dt.dayofweek  # 0=Mon
+    df["day_of_week"] = df["appointment_date_parsed"].dt.dayofweek
     df["day_name"]    = df["appointment_date_parsed"].dt.day_name()
 
-    # hour from appointment_time (HHMM integer)
     df["appointment_time_int"] = pd.to_numeric(df["appointment_time"], errors="coerce")
     df["hour"] = (df["appointment_time_int"] // 100).clip(lower=0, upper=23)
 
-    # patient age
+    # Patient age
     dob = pd.to_datetime(df["date_of_birth"], errors="coerce", utc=True).dt.tz_localize(None)
     age_days = (df["appointment_date_parsed"] - dob).dt.days
     df["patient_age"] = pd.to_numeric(age_days / 365.25, errors="coerce").fillna(40).astype(int)
 
-    # past no-show ratio per patient (rolling up to that row)
+    # Past no-show ratio (cumulative, shifted)
     df = df.sort_values(["patient_id", "appointment_date_parsed"]).reset_index(drop=True)
     df["is_noshow"] = (df["status"] == "No Show").astype(int)
-
-    # cumulative history (shifted so current row doesn't include itself)
-    df["cum_appts"]   = df.groupby("patient_id")["is_noshow"].cumcount()
+    df["cum_appts"]   = df.groupby("patient_id")["is_noshow"].cumcount().clip(lower=1)
     df["cum_noshows"] = df.groupby("patient_id")["is_noshow"].cumsum().shift(1).fillna(0)
-    df["cum_appts"]   = df["cum_appts"].clip(lower=1)
     df["past_noshow_ratio"] = df["cum_noshows"] / df["cum_appts"]
 
     return df
@@ -97,7 +235,7 @@ df = load_data()
 def train_model(_df):
     """Train gradient boosting on historical in-person appointments."""
     train_mask = (
-        (_df["prediction_eligible"] == True) &
+        (_df["prediction_eligible"].isin([True, "True", "true", 1, "1"])) &
         (_df["status"].isin(["Completed", "No Show"]))
     )
     train_df = _df[train_mask].copy()
@@ -109,7 +247,7 @@ def train_model(_df):
         "category_encoded",
     ]
 
-    # encode categoricals
+    # Encode categoricals
     train_df["insurance_encoded"] = train_df["insurance_type"].map(
         {"Private": 0, "Medicare": 1, "Medicaid": 2, "Self-Pay": 3}
     ).fillna(0).astype(int)
@@ -117,7 +255,7 @@ def train_model(_df):
     train_df["category_encoded"] = train_df["appointment_category"].astype("category").cat.codes
 
     train_df["sms_reminder_enrolled"] = train_df["sms_reminder_enrolled"].map(
-        {True: 1, False: 0, "True": 1, "False": 0}
+        {True: 1, False: 0, "True": 1, "False": 0, "true": 1, "false": 0}
     ).fillna(0).astype(int)
 
     train_df["distance_to_clinic_miles"] = pd.to_numeric(
@@ -135,24 +273,19 @@ def train_model(_df):
     )
 
     model = GradientBoostingClassifier(
-        n_estimators=200,
-        max_depth=5,
-        learning_rate=0.1,
-        subsample=0.8,
-        random_state=42,
+        n_estimators=200, max_depth=5, learning_rate=0.1,
+        subsample=0.8, random_state=42,
     )
     model.fit(X_train, y_train)
 
     y_pred_proba = model.predict_proba(X_test)[:, 1]
     auc = roc_auc_score(y_test, y_pred_proba)
-
-    # feature importances
     feat_imp = dict(zip(features, model.feature_importances_))
 
     return model, features, auc, feat_imp
 
 
-# prepare encoding mappings (needed for scoring)
+# Prepare encoding columns
 df["insurance_encoded"] = df["insurance_type"].map(
     {"Private": 0, "Medicare": 1, "Medicaid": 2, "Self-Pay": 3}
 ).fillna(0).astype(int)
@@ -160,7 +293,7 @@ df["insurance_encoded"] = df["insurance_type"].map(
 df["category_encoded"] = df["appointment_category"].astype("category").cat.codes
 
 df["sms_reminder_enrolled"] = df["sms_reminder_enrolled"].map(
-    {True: 1, False: 0, "True": 1, "False": 0}
+    {True: 1, False: 0, "True": 1, "False": 0, "true": 1, "false": 0}
 ).fillna(0).astype(int)
 
 df["distance_to_clinic_miles"] = pd.to_numeric(
@@ -174,7 +307,7 @@ model, features, auc_score, feat_imp = train_model(df)
 # ─────────────────────────────────────────────────────────────────────────────
 scheduled_mask = (
     (df["status"] == "Scheduled") &
-    (df["prediction_eligible"].isin([True, "True"])) &
+    (df["prediction_eligible"].isin([True, "True", "true", 1, "1"])) &
     (df["appointment_date_parsed"] >= TODAY)
 )
 upcoming = df[scheduled_mask].copy()
@@ -207,15 +340,19 @@ with st.sidebar:
 
     st.metric("Model AUC Score", f"{auc_score:.3f}")
     st.metric("Total Upcoming Appts", f"{len(upcoming):,}")
+    st.caption(f"Data source: Power BI Semantic Model")
+    st.caption(f"Workspace: {WORKSPACE_NAME}")
 
     st.divider()
     st.subheader("Filter")
 
+    min_date = TODAY.date()
+    max_date = (TODAY + timedelta(days=180)).date()
     date_range = st.date_input(
         "Appointment date range",
-        value=(TODAY.date(), (TODAY + timedelta(days=30)).date()),
-        min_value=TODAY.date(),
-        max_value=pd.Timestamp("2026-12-31").date(),
+        value=(min_date, (TODAY + timedelta(days=30)).date()),
+        min_value=min_date,
+        max_value=max_date,
     )
 
     risk_filter = st.multiselect(
@@ -238,7 +375,13 @@ with st.sidebar:
     )
     st.dataframe(imp_df, hide_index=True, use_container_width=True)
 
-# apply filters
+    # Refresh button
+    st.divider()
+    if st.button("🔄 Refresh Data from Model"):
+        st.cache_data.clear()
+        st.rerun()
+
+# Apply filters
 filtered = upcoming.copy()
 if date_range and len(date_range) == 2:
     filtered = filtered[
@@ -255,7 +398,11 @@ if category_filter:
 # MAIN DASHBOARD
 # ─────────────────────────────────────────────────────────────────────────────
 st.title("🏥 Clinical No-Show Prediction Dashboard")
-st.caption(f"As of {TODAY.strftime('%B %d, %Y')} • Model trained on {len(df[df['status'].isin(['Completed','No Show'])]):,} historical visits")
+st.caption(
+    f"Live from Power BI Semantic Model • "
+    f"As of {TODAY.strftime('%B %d, %Y')} • "
+    f"Model trained on {len(df[df['status'].isin(['Completed','No Show'])]):,} historical visits"
+)
 
 # ── KPI ROW ────────────────────────────────────────────────────────────────────
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
@@ -314,7 +461,6 @@ tab_weekly, tab_daily = st.tabs(["Weekly View", "Daily View"])
 
 with tab_weekly:
     weekly = filtered.copy()
-    weekly["week"] = weekly["appointment_date_parsed"].dt.isocalendar().week
     weekly["year_week"] = weekly["appointment_date_parsed"].dt.strftime("%Y-W%U")
     week_summary = weekly.groupby("year_week").agg(
         total_booked=("appointment_id", "count"),
@@ -324,14 +470,8 @@ with tab_weekly:
     ).reset_index()
     st.dataframe(week_summary, use_container_width=True, hide_index=True)
 
-    # chart
-    chart_data = week_summary.melt(
-        id_vars=["year_week"],
-        value_vars=["high_risk", "medium_risk", "low_risk"],
-        var_name="Risk Tier", value_name="Count"
-    )
     st.bar_chart(
-        chart_data.pivot(index="year_week", columns="Risk Tier", values="Count").fillna(0),
+        week_summary.set_index("year_week")[["high_risk", "medium_risk", "low_risk"]],
         color=["#F44336", "#FF9800", "#4CAF50"],
     )
 
@@ -400,7 +540,6 @@ col_a, col_b = st.columns(2)
 
 with col_a:
     st.markdown("##### Estimated Losses Without Intervention")
-    total_upcoming = len(filtered)
     expected_noshows = int(est_noshows)
     total_loss = expected_noshows * AVG_APPOINTMENT_REVENUE
 
@@ -410,10 +549,6 @@ with col_a:
 
 with col_b:
     st.markdown("##### Savings With Risk-Based Intervention")
-    # assume interventions reduce no-show by:
-    # High risk: 40% reduction (manual calls)
-    # Medium risk: 25% reduction (interactive SMS)
-    # Low risk: 10% reduction (standard SMS)
     saved_high = n_high * 0.78 * 0.40 * AVG_APPOINTMENT_REVENUE
     saved_med  = n_med  * 0.48 * 0.25 * AVG_APPOINTMENT_REVENUE
     saved_low  = n_low  * 0.15 * 0.10 * AVG_APPOINTMENT_REVENUE
@@ -431,7 +566,7 @@ st.subheader("📈 Historical No-Show Rate Trend")
 
 hist = df[
     (df["status"].isin(["Completed", "No Show"])) &
-    (df["prediction_eligible"].isin([True, "True"])) &
+    (df["prediction_eligible"].isin([True, "True", "true", 1, "1"])) &
     (df["appointment_date_parsed"].notna())
 ].copy()
 hist["year_month"] = hist["appointment_date_parsed"].dt.to_period("M").astype(str)
@@ -481,5 +616,6 @@ st.divider()
 st.caption(
     "Built for Hackathon 2026 — Infinity Nexus Team | "
     f"Data: {len(df):,} appointment records, {df['patient_id'].nunique():,} unique patients | "
-    f"Model: GradientBoosting (AUC={auc_score:.3f})"
+    f"Model: GradientBoosting (AUC={auc_score:.3f}) | "
+    f"Source: Power BI Semantic Model"
 )
