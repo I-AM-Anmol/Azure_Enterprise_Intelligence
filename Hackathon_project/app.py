@@ -30,9 +30,9 @@ AVG_APPOINTMENT_REVENUE = 250  # USD lost per no-show
 TODAY = pd.Timestamp.now().normalize()
 
 # Power BI connection settings (from Streamlit secrets or env vars)
-TENANT_ID     = st.secrets.get("TENANT_ID",     os.getenv("TENANT_ID", ""))
-CLIENT_ID     = st.secrets.get("CLIENT_ID",     os.getenv("CLIENT_ID", ""))
-CLIENT_SECRET = st.secrets.get("CLIENT_SECRET", os.getenv("CLIENT_SECRET", ""))
+TENANT_ID     = st.secrets.get("azure", {}).get("tenant_id", os.getenv("TENANT_ID", ""))
+CLIENT_ID     = st.secrets.get("azure", {}).get("client_id", os.getenv("CLIENT_ID", ""))
+CLIENT_SECRET = st.secrets.get("azure", {}).get("client_secret", os.getenv("CLIENT_SECRET", ""))
 WORKSPACE_NAME = "Clinical No-Show Prediction - Infinity Nexus"
 DATASET_NAME   = "Appointment and Patient data"
 
