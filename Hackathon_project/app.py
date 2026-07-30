@@ -18,7 +18,7 @@ import requests
 import os
 import json
 from datetime import datetime, timedelta
-from sklearn.ensemble import GradientBoostingClassifier
+from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
 import warnings
@@ -510,10 +510,12 @@ def train_model(_df):
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    model = GradientBoostingClassifier(
+    model = XGBClassifier(
         n_estimators=300, max_depth=5, learning_rate=0.1,
-        subsample=0.8, min_samples_leaf=5, min_samples_split=10,
-        random_state=42,
+        subsample=0.8, colsample_bytree=0.8,
+        min_child_weight=5, gamma=0.1,
+        eval_metric="auc", use_label_encoder=False,
+        random_state=42, verbosity=0,
     )
     model.fit(X_train, y_train)
 
@@ -1038,7 +1040,7 @@ st.markdown(f"""
     <p style="margin:0; color:#1B2A4A;">Built for <span style="color:#00B8A9; font-weight:600;">Hackathon 2026</span> — <span style="color:#00B8A9; font-weight:600;">Infinity Nexus Team</span></p>
     <p style="margin:4px 0 0; color:#64748B;">
         {len(df):,} appointment records • {df['patient_id'].nunique():,} unique patients •
-        GradientBoosting (AUC={auc_score:.3f}) • Power BI Semantic Model
+        XGBoost (AUC={auc_score:.3f}) • Power BI Semantic Model
     </p>
 </div>
 """, unsafe_allow_html=True)
