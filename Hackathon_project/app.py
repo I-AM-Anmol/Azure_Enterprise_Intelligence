@@ -232,11 +232,18 @@ h1, h2, h3 {
 [data-testid="stSidebar"] [data-testid="stChatMessage"] span {
     color: #FFFFFF !important;
 }
-[data-testid="stSidebar"] [data-testid="stChatInput"] input {
+[data-testid="stSidebar"] [data-testid="stChatInput"] input,
+[data-testid="stSidebar"] [data-testid="stChatInput"] textarea {
     background-color: #FFFFFF !important;
     color: #1B2A4A !important;
     border: 2px solid #00B8A9 !important;
     border-radius: 8px !important;
+    font-size: 0.95rem !important;
+}
+[data-testid="stSidebar"] [data-testid="stChatInput"] input::placeholder,
+[data-testid="stSidebar"] [data-testid="stChatInput"] textarea::placeholder {
+    color: #64748B !important;
+    opacity: 1 !important;
 }
 [data-testid="stSidebar"] [data-testid="stChatInput"] button {
     background-color: #00B8A9 !important;
