@@ -350,7 +350,7 @@ def send_noshow_reminders(high_risk_df, webhook_url):
     for _, row in high_risk_df.iterrows():
         patients.append({
             "patient_name": f"{row.get('first_name', '')} {row.get('last_name', '')}".strip(),
-            "patient_email": f"{row.get('first_name', '').lower()}.{row.get('last_name', '').lower()}@example.com",
+            "patient_email": "anmol.sharma@milliman.com",
             "appointment_date": pd.to_datetime(row["appointment_date_parsed"]).strftime("%B %d, %Y"),
             "appointment_time": str(row.get("appointment_time_int", "TBD")),
             "category": row.get("appointment_category", "General"),
@@ -362,7 +362,10 @@ def send_noshow_reminders(high_risk_df, webhook_url):
     payload = {"patients": patients, "total_count": len(patients), "sent_at": datetime.now().isoformat()}
     try:
         resp = requests.post(webhook_url, json=payload, timeout=30)
-        return resp.status_code in (200, 202), len(patients)
+        if resp.status_code in (200, 202, 204):
+            return True, len(patients)
+        else:
+            return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
     except Exception as e:
         return False, str(e)
 
