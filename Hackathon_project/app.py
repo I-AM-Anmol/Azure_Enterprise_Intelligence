@@ -622,24 +622,16 @@ with col_high:
     </div>
     """, unsafe_allow_html=True)
     st.markdown(f"**{n_high} appointments** → Manual staff callback + waitlist overbooking")
-
-# ── POWER AUTOMATE: SEND REMINDERS ───────────────────────────────────────────
-st.markdown("")
-pa_col1, pa_col2 = st.columns([1, 2])
-with pa_col1:
     send_disabled = (n_high == 0) or (not POWER_AUTOMATE_URL)
     tooltip = "Configure Power Automate webhook URL in secrets" if not POWER_AUTOMATE_URL else f"Send reminder emails to {n_high} high-risk patients"
-    if st.button(f"📧 Send Reminders to High-Risk Patients ({n_high})", disabled=send_disabled, help=tooltip, use_container_width=True):
+    if st.button(f"📧 Send Reminders ({n_high})", disabled=send_disabled, help=tooltip, use_container_width=True):
         high_risk_patients = filtered[filtered["risk_tier"] == "High Risk"]
         with st.spinner("Sending to Power Automate..."):
             success, result = send_noshow_reminders(high_risk_patients, POWER_AUTOMATE_URL)
         if success:
-            st.success(f"✅ Successfully triggered reminders for {result} patients!")
+            st.success(f"✅ Reminders sent for {result} patients!")
         else:
-            st.error(f"❌ Failed to send reminders: {result}")
-with pa_col2:
-    if not POWER_AUTOMATE_URL:
-        st.info("💡 Add your Power Automate webhook URL in **Settings > Secrets** under `[power_automate]` → `webhook_url` to enable email reminders.")
+            st.error(f"❌ Failed: {result}")
 
 st.divider()
 
