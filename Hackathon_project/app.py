@@ -40,6 +40,9 @@ DATASET_NAME   = "Appointment and Patient data"
 # AI Chatbot (Groq - free tier, runs Llama models)
 GROQ_API_KEY = st.secrets.get("groq", {}).get("api_key", os.getenv("GROQ_API_KEY", ""))
 
+# Power Automate webhook for email notifications
+POWER_AUTOMATE_URL = st.secrets.get("power_automate", {}).get("webhook_url", os.getenv("POWER_AUTOMATE_URL", ""))
+
 st.set_page_config(
     page_title="Clinical No-Show Prediction",
     page_icon="🏥",
@@ -339,6 +342,30 @@ else:
     upcoming["risk_tier"] = []
 
 # ─────────────────────────────────────────────────────────────────────────────
+# POWER AUTOMATE HELPER FUNCTION
+# ─────────────────────────────────────────────────────────────────────────────
+def send_noshow_reminders(high_risk_df, webhook_url):
+    """Send high-risk patient details to Power Automate for email notifications."""
+    patients = []
+    for _, row in high_risk_df.iterrows():
+        patients.append({
+            "patient_name": f"{row.get('first_name', '')} {row.get('last_name', '')}".strip(),
+            "patient_email": f"{row.get('first_name', '').lower()}.{row.get('last_name', '').lower()}@example.com",
+            "appointment_date": pd.to_datetime(row["appointment_date_parsed"]).strftime("%B %d, %Y"),
+            "appointment_time": str(row.get("appointment_time_int", "TBD")),
+            "category": row.get("appointment_category", "General"),
+            "reason": row.get("reason_for_visit", "Routine Visit"),
+            "risk_score": round(float(row.get("noshow_pct", 0)), 1),
+            "clinic_name": "Infinity Nexus Clinical Center",
+        })
+
+    payload = {"patients": patients, "total_count": len(patients), "sent_at": datetime.now().isoformat()}
+    try:
+        resp = requests.post(webhook_url, json=payload, timeout=30)
+        return resp.status_code in (200, 202), len(patients)
+    except Exception as e:
+        return False, str(e)
+
 # CHATBOT HELPER FUNCTIONS
 # ─────────────────────────────────────────────────────────────────────────────
 def get_data_summary(df_full, df_upcoming, df_filtered):
@@ -592,6 +619,24 @@ with col_high:
     </div>
     """, unsafe_allow_html=True)
     st.markdown(f"**{n_high} appointments** → Manual staff callback + waitlist overbooking")
+
+# ── POWER AUTOMATE: SEND REMINDERS ───────────────────────────────────────────
+st.markdown("")
+pa_col1, pa_col2 = st.columns([1, 2])
+with pa_col1:
+    send_disabled = (n_high == 0) or (not POWER_AUTOMATE_URL)
+    tooltip = "Configure Power Automate webhook URL in secrets" if not POWER_AUTOMATE_URL else f"Send reminder emails to {n_high} high-risk patients"
+    if st.button(f"📧 Send Reminders to High-Risk Patients ({n_high})", disabled=send_disabled, help=tooltip, use_container_width=True):
+        high_risk_patients = filtered[filtered["risk_tier"] == "High Risk"]
+        with st.spinner("Sending to Power Automate..."):
+            success, result = send_noshow_reminders(high_risk_patients, POWER_AUTOMATE_URL)
+        if success:
+            st.success(f"✅ Successfully triggered reminders for {result} patients!")
+        else:
+            st.error(f"❌ Failed to send reminders: {result}")
+with pa_col2:
+    if not POWER_AUTOMATE_URL:
+        st.info("💡 Add your Power Automate webhook URL in **Settings > Secrets** under `[power_automate]` → `webhook_url` to enable email reminders.")
 
 st.divider()
 
