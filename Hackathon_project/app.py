@@ -200,6 +200,48 @@ h1, h2, h3 {
     border-radius: 6px !important;
     color: #1B2A4A !important;
 }
+/* Sidebar expander (chatbot) */
+[data-testid="stSidebar"] .streamlit-expanderHeader,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary {
+    background-color: #243352 !important;
+    border: 1px solid #3D5A80 !important;
+    border-radius: 6px !important;
+}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary span,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p {
+    color: #FFFFFF !important;
+    font-weight: 600 !important;
+}
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+    background-color: #1F3155 !important;
+    border: 1px solid #3D5A80 !important;
+    border-top: none !important;
+    border-radius: 0 0 6px 6px !important;
+}
+[data-testid="stSidebar"] [data-testid="stExpander"] .stCaption,
+[data-testid="stSidebar"] [data-testid="stExpander"] p {
+    color: #B0C4DE !important;
+}
+[data-testid="stSidebar"] [data-testid="stChatMessage"] {
+    background-color: #243352 !important;
+    border: 1px solid #3D5A80 !important;
+    border-radius: 8px !important;
+    color: #FFFFFF !important;
+}
+[data-testid="stSidebar"] [data-testid="stChatMessage"] p,
+[data-testid="stSidebar"] [data-testid="stChatMessage"] span {
+    color: #FFFFFF !important;
+}
+[data-testid="stSidebar"] [data-testid="stChatInput"] input {
+    background-color: #FFFFFF !important;
+    color: #1B2A4A !important;
+    border: 2px solid #00B8A9 !important;
+    border-radius: 8px !important;
+}
+[data-testid="stSidebar"] [data-testid="stChatInput"] button {
+    background-color: #00B8A9 !important;
+    color: #FFFFFF !important;
+}
 
 /* Multiselect and inputs */
 [data-baseweb="select"], [data-baseweb="input"] {
