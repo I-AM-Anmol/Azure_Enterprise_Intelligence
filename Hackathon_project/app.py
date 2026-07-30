@@ -51,6 +51,125 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
+# CUSTOM DARK THEME CSS
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* Global font and spacing */
+html, body, [class*="css"] {
+    font-family: 'Segoe UI', sans-serif;
+}
+
+/* Metric cards */
+[data-testid="stMetric"] {
+    background: #21262D;
+    border: 1px solid #30363D;
+    border-left: 4px solid #00BFA5;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+[data-testid="stMetric"] label {
+    color: #B0B8C4 !important;
+    font-size: 0.85rem !important;
+}
+[data-testid="stMetric"] [data-testid="stMetricValue"] {
+    color: #FFFFFF !important;
+    font-weight: 700 !important;
+}
+
+/* Buttons */
+.stButton > button {
+    background-color: #00BFA5 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 0.6rem 1.2rem !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 6px rgba(0,191,165,0.3) !important;
+}
+.stButton > button:hover {
+    background-color: #00E5CC !important;
+    box-shadow: 0 4px 12px rgba(0,191,165,0.5) !important;
+    transform: translateY(-1px) !important;
+}
+.stButton > button:disabled {
+    background-color: #30363D !important;
+    color: #6B7280 !important;
+    box-shadow: none !important;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    border-right: 1px solid #30363D;
+}
+[data-testid="stSidebar"] .stTitle {
+    color: #00BFA5 !important;
+}
+
+/* Dataframes */
+[data-testid="stDataFrame"] {
+    border: 1px solid #30363D;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Expanders */
+.streamlit-expanderHeader {
+    background-color: #21262D !important;
+    border-radius: 6px !important;
+    color: #FFFFFF !important;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+}
+.stTabs [data-baseweb="tab"] {
+    background-color: #21262D;
+    border-radius: 6px 6px 0 0;
+    color: #B0B8C4;
+    padding: 8px 16px;
+}
+.stTabs [aria-selected="true"] {
+    background-color: #00BFA5 !important;
+    color: #FFFFFF !important;
+}
+
+/* Dividers */
+hr {
+    border-color: #30363D !important;
+}
+
+/* Headers */
+h1, h2, h3 {
+    color: #FFFFFF !important;
+    font-weight: 700 !important;
+}
+h1 {
+    border-bottom: 2px solid #00BFA5;
+    padding-bottom: 8px;
+}
+
+/* Captions */
+.stCaption, [data-testid="stCaption"] {
+    color: #8B949E !important;
+}
+
+/* Info/Success/Error boxes */
+[data-testid="stAlert"] {
+    border-radius: 8px !important;
+}
+
+/* Multiselect and inputs */
+[data-baseweb="select"], [data-baseweb="input"] {
+    border-color: #30363D !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # POWER BI AUTHENTICATION & DAX QUERY ENGINE
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600)
@@ -471,9 +590,13 @@ Format responses with bullet points or short paragraphs for readability.
 # SIDEBAR
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/hospital-3.png", width=60)
-    st.title("No-Show Predictor")
-    st.caption("Clinical Appointment Intelligence")
+    st.markdown("""
+    <div style="text-align:center; padding:10px 0;">
+        <span style="font-size:48px;">🏥</span>
+        <h2 style="margin:5px 0 0; color:#00BFA5; font-weight:700;">No-Show Predictor</h2>
+        <p style="margin:0; color:#8B949E; font-size:0.85rem;">Clinical Appointment Intelligence</p>
+    </div>
+    """, unsafe_allow_html=True)
 
     # Refresh & Chatbot — right under the title
     if st.button("🔄 Refresh Data from Model", use_container_width=True):
@@ -568,7 +691,11 @@ if category_filter:
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN DASHBOARD
 # ─────────────────────────────────────────────────────────────────────────────
-st.title("🏥 Clinical No-Show Prediction Dashboard")
+st.markdown("""
+<h1 style="margin-bottom:0; border-bottom:2px solid #00BFA5; padding-bottom:10px;">
+    🏥 Clinical No-Show Prediction Dashboard
+</h1>
+""", unsafe_allow_html=True)
 st.caption(
     f"Live from Power BI Semantic Model • "
     f"As of {TODAY.strftime('%B %d, %Y')} • "
@@ -598,27 +725,27 @@ col_low, col_med, col_high = st.columns(3)
 
 with col_low:
     st.markdown("""
-    <div style="background-color:#4CAF50; padding:15px; border-radius:8px; color:white; text-align:center;">
-        <h3 style="margin:0; color:white;">🟢 Low Risk</h3>
-        <p style="margin:5px 0; font-size:24px; font-weight:bold;">&lt; 30%</p>
+    <div style="background:#1B5E20; padding:20px; border-radius:10px; color:white; text-align:center; border:1px solid #388E3C; box-shadow:0 4px 12px rgba(76,175,80,0.2);">
+        <h3 style="margin:0; color:#81C784; font-size:1.1rem;">🟢 Low Risk</h3>
+        <p style="margin:8px 0 0; font-size:28px; font-weight:bold; color:#FFFFFF;">&lt; 30%</p>
     </div>
     """, unsafe_allow_html=True)
-    st.markdown(f"**{n_low} appointments** → Send standard 24hr SMS confirmation")
+    st.markdown(f"**{n_low} appointments** → Standard 24hr SMS confirmation")
 
 with col_med:
     st.markdown("""
-    <div style="background-color:#FF9800; padding:15px; border-radius:8px; color:white; text-align:center;">
-        <h3 style="margin:0; color:white;">🟡 Medium Risk</h3>
-        <p style="margin:5px 0; font-size:24px; font-weight:bold;">30% – 70%</p>
+    <div style="background:#E65100; padding:20px; border-radius:10px; color:white; text-align:center; border:1px solid #FF8F00; box-shadow:0 4px 12px rgba(255,152,0,0.2);">
+        <h3 style="margin:0; color:#FFB74D; font-size:1.1rem;">🟡 Medium Risk</h3>
+        <p style="margin:8px 0 0; font-size:28px; font-weight:bold; color:#FFFFFF;">30% – 70%</p>
     </div>
     """, unsafe_allow_html=True)
-    st.markdown(f"**{n_med} appointments** → Interactive SMS/Email requiring CONFIRM or CANCEL")
+    st.markdown(f"**{n_med} appointments** → Interactive SMS/Email: CONFIRM or CANCEL")
 
 with col_high:
     st.markdown("""
-    <div style="background-color:#F44336; padding:15px; border-radius:8px; color:white; text-align:center;">
-        <h3 style="margin:0; color:white;">🔴 High Risk</h3>
-        <p style="margin:5px 0; font-size:24px; font-weight:bold;">&gt; 70%</p>
+    <div style="background:#B71C1C; padding:20px; border-radius:10px; color:white; text-align:center; border:1px solid #E53935; box-shadow:0 4px 12px rgba(244,67,54,0.2);">
+        <h3 style="margin:0; color:#EF5350; font-size:1.1rem;">🔴 High Risk</h3>
+        <p style="margin:8px 0 0; font-size:28px; font-weight:bold; color:#FFFFFF;">&gt; 70%</p>
     </div>
     """, unsafe_allow_html=True)
     st.markdown(f"**{n_high} appointments** → Manual staff callback + waitlist overbooking")
@@ -798,9 +925,12 @@ else:
 
 # ── FOOTER ─────────────────────────────────────────────────────────────────────
 st.divider()
-st.caption(
-    "Built for Hackathon 2026 — Infinity Nexus Team | "
-    f"Data: {len(df):,} appointment records, {df['patient_id'].nunique():,} unique patients | "
-    f"Model: GradientBoosting (AUC={auc_score:.3f}) | "
-    f"Source: Power BI Semantic Model"
-)
+st.markdown(f"""
+<div style="text-align:center; padding:20px 0; color:#8B949E; font-size:0.8rem;">
+    <p style="margin:0;">Built for <span style="color:#00BFA5; font-weight:600;">Hackathon 2026</span> — <span style="color:#00BFA5;">Infinity Nexus Team</span></p>
+    <p style="margin:4px 0 0; color:#6B7280;">
+        {len(df):,} appointment records • {df['patient_id'].nunique():,} unique patients •
+        GradientBoosting (AUC={auc_score:.3f}) • Power BI Semantic Model
+    </p>
+</div>
+""", unsafe_allow_html=True)
