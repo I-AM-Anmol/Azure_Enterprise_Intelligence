@@ -442,6 +442,25 @@ def load_data():
     df["cum_noshows"] = df.groupby("patient_id")["is_noshow"].cumsum().shift(1).fillna(0)
     df["past_noshow_ratio"] = df["cum_noshows"] / df["cum_appts"]
 
+    # Encode sms early so engineered features can use it
+    df["sms_reminder_enrolled"] = df["sms_reminder_enrolled"].map(
+        {True: 1, False: 0, "True": 1, "False": 0, "true": 1, "false": 0}
+    ).fillna(0).astype(int)
+
+    # Additional engineered features for better accuracy
+    df["is_morning"] = (df["hour"] < 12).astype(int)
+    df["is_monday"] = (df["day_of_week"] == 0).astype(int)
+    df["is_friday"] = (df["day_of_week"] == 4).astype(int)
+    df["long_lead"] = (df["lead_days"] > 14).astype(int)
+    df["short_lead"] = (df["lead_days"] <= 2).astype(int)
+    df["far_distance"] = (pd.to_numeric(df["distance_to_clinic_miles"], errors="coerce").fillna(15) > 20).astype(int)
+    df["is_self_pay"] = (df["insurance_type"] == "Self-Pay").astype(int)
+    df["no_sms"] = (1 - df["sms_reminder_enrolled"]).astype(int)
+    df["total_past_appts"] = df.groupby("patient_id").cumcount()
+    df["age_bucket"] = pd.cut(df["patient_age"], bins=[0, 25, 40, 60, 100], labels=[0, 1, 2, 3]).astype(float).fillna(1)
+    df["lead_x_distance"] = df["lead_days"] * pd.to_numeric(df["distance_to_clinic_miles"], errors="coerce").fillna(15)
+    df["risk_combo"] = df["past_noshow_ratio"] * df["lead_days"]
+
     return df
 
 
@@ -464,6 +483,10 @@ def train_model(_df):
         "past_noshow_ratio", "distance_to_clinic_miles",
         "sms_reminder_enrolled", "insurance_encoded",
         "category_encoded",
+        "is_morning", "is_monday", "is_friday",
+        "long_lead", "short_lead", "far_distance",
+        "is_self_pay", "no_sms", "total_past_appts",
+        "age_bucket", "lead_x_distance", "risk_combo",
     ]
 
     # Encode categoricals
@@ -492,8 +515,9 @@ def train_model(_df):
     )
 
     model = GradientBoostingClassifier(
-        n_estimators=200, max_depth=5, learning_rate=0.1,
-        subsample=0.8, random_state=42,
+        n_estimators=500, max_depth=4, learning_rate=0.05,
+        subsample=0.85, min_samples_leaf=10, min_samples_split=20,
+        max_features="sqrt", random_state=42,
     )
     model.fit(X_train, y_train)
 
