@@ -478,14 +478,11 @@ def train_model(_df):
     train_df = _df[train_mask].copy()
 
     features = [
-        "lead_days", "day_of_week", "hour", "patient_age",
-        "past_noshow_ratio", "distance_to_clinic_miles",
-        "sms_reminder_enrolled", "insurance_encoded",
-        "category_encoded",
-        "is_morning", "is_monday", "is_friday",
-        "long_lead", "short_lead", "far_distance",
-        "is_self_pay", "no_sms", "total_past_appts",
-        "age_bucket", "risk_combo",
+        "past_noshow_ratio", "risk_combo", "lead_days",
+        "distance_to_clinic_miles", "patient_age",
+        "total_past_appts", "hour", "day_of_week",
+        "category_encoded", "insurance_encoded",
+        "no_sms", "is_self_pay", "far_distance",
     ]
 
     # Encode categoricals
