@@ -361,21 +361,7 @@ def send_noshow_reminders(high_risk_df, webhook_url):
 
     payload = {"patients": patients, "total_count": len(patients), "sent_at": datetime.now().isoformat()}
     try:
-        # Get OAuth token for Power Platform API
-        token_url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
-        token_data = {
-            "grant_type": "client_credentials",
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "scope": "https://service.flow.microsoft.com/.default",
-        }
-        token_resp = requests.post(token_url, data=token_data, timeout=15)
-        if token_resp.status_code != 200:
-            return False, f"Auth failed: {token_resp.text[:200]}"
-        access_token = token_resp.json().get("access_token")
-
-        headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-        resp = requests.post(webhook_url, json=payload, headers=headers, timeout=30)
+        resp = requests.post(webhook_url, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
         if resp.status_code in (200, 202, 204):
             return True, len(patients)
         else:
