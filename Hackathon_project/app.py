@@ -55,116 +55,128 @@ st.set_page_config(
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-/* Global font and spacing */
+/* Global font */
 html, body, [class*="css"] {
     font-family: 'Segoe UI', sans-serif;
 }
 
+/* Header bar — dark navy like Siemens top nav */
+header[data-testid="stHeader"] {
+    background-color: #1B2A4A !important;
+}
+
 /* Metric cards */
 [data-testid="stMetric"] {
-    background: #21262D;
-    border: 1px solid #30363D;
-    border-left: 4px solid #00BFA5;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-left: 4px solid #00B8A9;
     border-radius: 8px;
     padding: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 [data-testid="stMetric"] label {
-    color: #B0B8C4 !important;
+    color: #64748B !important;
     font-size: 0.85rem !important;
 }
 [data-testid="stMetric"] [data-testid="stMetricValue"] {
-    color: #FFFFFF !important;
+    color: #1B2A4A !important;
     font-weight: 700 !important;
 }
 
-/* Buttons */
+/* Buttons — teal */
 .stButton > button {
-    background-color: #00BFA5 !important;
+    background-color: #00B8A9 !important;
     color: #FFFFFF !important;
     border: none !important;
     border-radius: 6px !important;
     padding: 0.6rem 1.2rem !important;
     font-weight: 600 !important;
     transition: all 0.2s ease !important;
-    box-shadow: 0 2px 6px rgba(0,191,165,0.3) !important;
+    box-shadow: 0 2px 6px rgba(0,184,169,0.25) !important;
 }
 .stButton > button:hover {
-    background-color: #00E5CC !important;
-    box-shadow: 0 4px 12px rgba(0,191,165,0.5) !important;
+    background-color: #009688 !important;
+    box-shadow: 0 4px 12px rgba(0,184,169,0.4) !important;
     transform: translateY(-1px) !important;
 }
 .stButton > button:disabled {
-    background-color: #30363D !important;
-    color: #6B7280 !important;
+    background-color: #E2E8F0 !important;
+    color: #94A3B8 !important;
     box-shadow: none !important;
 }
 
-/* Sidebar */
+/* Sidebar — dark navy */
 [data-testid="stSidebar"] {
-    border-right: 1px solid #30363D;
+    background-color: #1B2A4A !important;
+    border-right: none;
 }
-[data-testid="stSidebar"] .stTitle {
-    color: #00BFA5 !important;
+[data-testid="stSidebar"] * {
+    color: #E2E8F0 !important;
+}
+[data-testid="stSidebar"] [data-testid="stMetric"] {
+    background: #243352 !important;
+    border: 1px solid #34495E !important;
+    border-left: 4px solid #00B8A9 !important;
+}
+[data-testid="stSidebar"] [data-testid="stMetric"] label {
+    color: #94A3B8 !important;
+}
+[data-testid="stSidebar"] [data-testid="stMetric"] [data-testid="stMetricValue"] {
+    color: #FFFFFF !important;
+}
+[data-testid="stSidebar"] .stButton > button {
+    background-color: #00B8A9 !important;
+    color: #FFFFFF !important;
 }
 
 /* Dataframes */
 [data-testid="stDataFrame"] {
-    border: 1px solid #30363D;
+    border: 1px solid #E2E8F0;
     border-radius: 8px;
     overflow: hidden;
 }
 
-/* Expanders */
-.streamlit-expanderHeader {
-    background-color: #21262D !important;
-    border-radius: 6px !important;
-    color: #FFFFFF !important;
-}
-
 /* Tabs */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
+    gap: 4px;
 }
 .stTabs [data-baseweb="tab"] {
-    background-color: #21262D;
+    background-color: #F1F5F9;
     border-radius: 6px 6px 0 0;
-    color: #B0B8C4;
+    color: #64748B;
     padding: 8px 16px;
 }
 .stTabs [aria-selected="true"] {
-    background-color: #00BFA5 !important;
+    background-color: #1B2A4A !important;
     color: #FFFFFF !important;
 }
 
 /* Dividers */
 hr {
-    border-color: #30363D !important;
+    border-color: #E2E8F0 !important;
 }
 
-/* Headers */
+/* Headers — dark navy */
 h1, h2, h3 {
-    color: #FFFFFF !important;
+    color: #1B2A4A !important;
     font-weight: 700 !important;
-}
-h1 {
-    border-bottom: 2px solid #00BFA5;
-    padding-bottom: 8px;
 }
 
 /* Captions */
 .stCaption, [data-testid="stCaption"] {
-    color: #8B949E !important;
+    color: #64748B !important;
 }
 
-/* Info/Success/Error boxes */
-[data-testid="stAlert"] {
-    border-radius: 8px !important;
+/* Expanders */
+.streamlit-expanderHeader {
+    background-color: #F1F5F9 !important;
+    border-radius: 6px !important;
+    color: #1B2A4A !important;
 }
 
 /* Multiselect and inputs */
 [data-baseweb="select"], [data-baseweb="input"] {
-    border-color: #30363D !important;
+    border-color: #E2E8F0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -591,10 +603,10 @@ Format responses with bullet points or short paragraphs for readability.
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style="text-align:center; padding:10px 0;">
+    <div style="text-align:center; padding:15px 0;">
         <span style="font-size:48px;">🏥</span>
-        <h2 style="margin:5px 0 0; color:#00BFA5; font-weight:700;">No-Show Predictor</h2>
-        <p style="margin:0; color:#8B949E; font-size:0.85rem;">Clinical Appointment Intelligence</p>
+        <h2 style="margin:5px 0 0; color:#00B8A9 !important; font-weight:700;">No-Show Predictor</h2>
+        <p style="margin:0; color:#94A3B8 !important; font-size:0.85rem;">Clinical Appointment Intelligence</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -692,7 +704,7 @@ if category_filter:
 # MAIN DASHBOARD
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
-<h1 style="margin-bottom:0; border-bottom:2px solid #00BFA5; padding-bottom:10px;">
+<h1 style="margin-bottom:0; color:#1B2A4A !important; border-bottom:3px solid #00B8A9; padding-bottom:10px;">
     🏥 Clinical No-Show Prediction Dashboard
 </h1>
 """, unsafe_allow_html=True)
@@ -725,8 +737,8 @@ col_low, col_med, col_high = st.columns(3)
 
 with col_low:
     st.markdown("""
-    <div style="background:#1B5E20; padding:20px; border-radius:10px; color:white; text-align:center; border:1px solid #388E3C; box-shadow:0 4px 12px rgba(76,175,80,0.2);">
-        <h3 style="margin:0; color:#81C784; font-size:1.1rem;">🟢 Low Risk</h3>
+    <div style="background:linear-gradient(135deg, #2E7D32, #43A047); padding:20px; border-radius:10px; color:white; text-align:center; box-shadow:0 4px 12px rgba(46,125,50,0.3);">
+        <h3 style="margin:0; color:#FFFFFF; font-size:1rem; opacity:0.9;">🟢 Low Risk</h3>
         <p style="margin:8px 0 0; font-size:28px; font-weight:bold; color:#FFFFFF;">&lt; 30%</p>
     </div>
     """, unsafe_allow_html=True)
@@ -734,8 +746,8 @@ with col_low:
 
 with col_med:
     st.markdown("""
-    <div style="background:#E65100; padding:20px; border-radius:10px; color:white; text-align:center; border:1px solid #FF8F00; box-shadow:0 4px 12px rgba(255,152,0,0.2);">
-        <h3 style="margin:0; color:#FFB74D; font-size:1.1rem;">🟡 Medium Risk</h3>
+    <div style="background:linear-gradient(135deg, #E65100, #F57C00); padding:20px; border-radius:10px; color:white; text-align:center; box-shadow:0 4px 12px rgba(230,81,0,0.3);">
+        <h3 style="margin:0; color:#FFFFFF; font-size:1rem; opacity:0.9;">🟡 Medium Risk</h3>
         <p style="margin:8px 0 0; font-size:28px; font-weight:bold; color:#FFFFFF;">30% – 70%</p>
     </div>
     """, unsafe_allow_html=True)
@@ -743,8 +755,8 @@ with col_med:
 
 with col_high:
     st.markdown("""
-    <div style="background:#B71C1C; padding:20px; border-radius:10px; color:white; text-align:center; border:1px solid #E53935; box-shadow:0 4px 12px rgba(244,67,54,0.2);">
-        <h3 style="margin:0; color:#EF5350; font-size:1.1rem;">🔴 High Risk</h3>
+    <div style="background:linear-gradient(135deg, #C62828, #E53935); padding:20px; border-radius:10px; color:white; text-align:center; box-shadow:0 4px 12px rgba(198,40,40,0.3);">
+        <h3 style="margin:0; color:#FFFFFF; font-size:1rem; opacity:0.9;">🔴 High Risk</h3>
         <p style="margin:8px 0 0; font-size:28px; font-weight:bold; color:#FFFFFF;">&gt; 70%</p>
     </div>
     """, unsafe_allow_html=True)
@@ -926,9 +938,9 @@ else:
 # ── FOOTER ─────────────────────────────────────────────────────────────────────
 st.divider()
 st.markdown(f"""
-<div style="text-align:center; padding:20px 0; color:#8B949E; font-size:0.8rem;">
-    <p style="margin:0;">Built for <span style="color:#00BFA5; font-weight:600;">Hackathon 2026</span> — <span style="color:#00BFA5;">Infinity Nexus Team</span></p>
-    <p style="margin:4px 0 0; color:#6B7280;">
+<div style="text-align:center; padding:20px 0; font-size:0.8rem;">
+    <p style="margin:0; color:#1B2A4A;">Built for <span style="color:#00B8A9; font-weight:600;">Hackathon 2026</span> — <span style="color:#00B8A9; font-weight:600;">Infinity Nexus Team</span></p>
+    <p style="margin:4px 0 0; color:#64748B;">
         {len(df):,} appointment records • {df['patient_id'].nunique():,} unique patients •
         GradientBoosting (AUC={auc_score:.3f}) • Power BI Semantic Model
     </p>
