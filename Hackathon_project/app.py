@@ -128,6 +128,33 @@ header[data-testid="stHeader"] {
     background-color: #00B8A9 !important;
     color: #FFFFFF !important;
 }
+/* Sidebar inputs — visible text on dark background */
+[data-testid="stSidebar"] [data-baseweb="input"] input,
+[data-testid="stSidebar"] [data-baseweb="select"] span,
+[data-testid="stSidebar"] [data-baseweb="select"] div,
+[data-testid="stSidebar"] .stDateInput input,
+[data-testid="stSidebar"] .stMultiSelect span,
+[data-testid="stSidebar"] [data-testid="stMultiSelect"] span {
+    color: #FFFFFF !important;
+}
+[data-testid="stSidebar"] [data-baseweb="input"],
+[data-testid="stSidebar"] [data-baseweb="select"] > div {
+    background-color: #243352 !important;
+    border-color: #3D5A80 !important;
+}
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] .stSubheader,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span {
+    color: #E2E8F0 !important;
+}
+[data-testid="stSidebar"] [data-baseweb="tag"] {
+    background-color: #00B8A9 !important;
+    color: #FFFFFF !important;
+}
+[data-testid="stSidebar"] [data-baseweb="tag"] span {
+    color: #FFFFFF !important;
+}
 
 /* Dataframes */
 [data-testid="stDataFrame"] {
