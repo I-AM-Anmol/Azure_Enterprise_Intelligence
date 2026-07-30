@@ -511,9 +511,9 @@ def train_model(_df):
     )
 
     model = GradientBoostingClassifier(
-        n_estimators=500, max_depth=4, learning_rate=0.05,
-        subsample=0.85, min_samples_leaf=10, min_samples_split=20,
-        max_features="sqrt", random_state=42,
+        n_estimators=300, max_depth=5, learning_rate=0.1,
+        subsample=0.8, min_samples_leaf=5, min_samples_split=10,
+        random_state=42,
     )
     model.fit(X_train, y_train)
 
@@ -559,7 +559,7 @@ if len(upcoming) > 0:
     upcoming["noshow_pct"] = (upcoming["noshow_probability"] * 100).round(1)
     upcoming["risk_tier"] = pd.cut(
         upcoming["noshow_probability"],
-        bins=[0, 0.30, 0.70, 1.0],
+        bins=[0, 0.30, 0.60, 1.0],
         labels=["Low Risk", "Medium Risk", "High Risk"],
         include_lowest=True,
     )
@@ -819,8 +819,8 @@ n_low  = len(filtered[filtered["risk_tier"] == "Low Risk"])
 est_noshows = n_high * 0.78 + n_med * 0.48 + n_low * 0.15
 est_cost    = est_noshows * AVG_APPOINTMENT_REVENUE
 
-kpi1.metric("🔴 High Risk", f"{n_high}", help="No-show probability > 70%")
-kpi2.metric("🟡 Medium Risk", f"{n_med}", help="No-show probability 30-70%")
+kpi1.metric("🔴 High Risk", f"{n_high}", help="No-show probability > 60%")
+kpi2.metric("🟡 Medium Risk", f"{n_med}", help="No-show probability 30-60%")
 kpi3.metric("🟢 Low Risk", f"{n_low}", help="No-show probability < 30%")
 kpi4.metric("💰 Est. Revenue at Risk", f"${est_cost:,.0f}", help=f"Based on ${AVG_APPOINTMENT_REVENUE}/missed appt")
 
@@ -844,7 +844,7 @@ with col_med:
     st.markdown("""
     <div style="background:linear-gradient(135deg, #E65100, #F57C00); padding:20px; border-radius:10px; color:white; text-align:center; box-shadow:0 4px 12px rgba(230,81,0,0.3);">
         <h3 style="margin:0; color:#FFFFFF; font-size:1rem; opacity:0.9;">🟡 Medium Risk</h3>
-        <p style="margin:8px 0 0; font-size:28px; font-weight:bold; color:#FFFFFF;">30% – 70%</p>
+        <p style="margin:8px 0 0; font-size:28px; font-weight:bold; color:#FFFFFF;">30% – 60%</p>
     </div>
     """, unsafe_allow_html=True)
     st.markdown(f"**{n_med} appointments** → Interactive SMS/Email: CONFIRM or CANCEL")
@@ -853,7 +853,7 @@ with col_high:
     st.markdown("""
     <div style="background:linear-gradient(135deg, #C62828, #E53935); padding:20px; border-radius:10px; color:white; text-align:center; box-shadow:0 4px 12px rgba(198,40,40,0.3);">
         <h3 style="margin:0; color:#FFFFFF; font-size:1rem; opacity:0.9;">🔴 High Risk</h3>
-        <p style="margin:8px 0 0; font-size:28px; font-weight:bold; color:#FFFFFF;">&gt; 70%</p>
+        <p style="margin:8px 0 0; font-size:28px; font-weight:bold; color:#FFFFFF;">&gt; 60%</p>
     </div>
     """, unsafe_allow_html=True)
     st.markdown(f"**{n_high} appointments** → Manual staff callback + waitlist overbooking")
