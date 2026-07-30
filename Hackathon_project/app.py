@@ -459,7 +459,8 @@ def load_data():
     df["total_past_appts"] = df.groupby("patient_id").cumcount()
     df["age_bucket"] = pd.cut(df["patient_age"], bins=[0, 25, 40, 60, 100], labels=[0, 1, 2, 3]).astype(float).fillna(1)
     df["lead_x_distance"] = df["lead_days"] * pd.to_numeric(df["distance_to_clinic_miles"], errors="coerce").fillna(15)
-    df["risk_combo"] = df["past_noshow_ratio"] * df["lead_days"]
+    df["noshow_history_flag"] = (df["past_noshow_ratio"] > 0.3).astype(int)
+    df["past_noshow_squared"] = df["past_noshow_ratio"] ** 2
 
     return df
 
@@ -479,14 +480,15 @@ def train_model(_df):
     train_df = _df[train_mask].copy()
 
     features = [
-        "lead_days", "day_of_week", "hour", "patient_age",
-        "past_noshow_ratio", "distance_to_clinic_miles",
+        "past_noshow_ratio", "past_noshow_squared", "noshow_history_flag",
+        "lead_days", "distance_to_clinic_miles", "patient_age",
+        "day_of_week", "hour", "total_past_appts",
         "sms_reminder_enrolled", "insurance_encoded",
         "category_encoded",
         "is_morning", "is_monday", "is_friday",
         "long_lead", "short_lead", "far_distance",
-        "is_self_pay", "no_sms", "total_past_appts",
-        "age_bucket", "lead_x_distance", "risk_combo",
+        "is_self_pay", "no_sms",
+        "age_bucket", "lead_x_distance",
     ]
 
     # Encode categoricals
