@@ -511,9 +511,11 @@ def train_model(_df):
     )
 
     model = XGBClassifier(
-        n_estimators=300, max_depth=5, learning_rate=0.1,
-        subsample=0.8, colsample_bytree=0.8,
-        min_child_weight=5, gamma=0.1,
+        n_estimators=500, max_depth=6, learning_rate=0.05,
+        subsample=0.85, colsample_bytree=0.7,
+        min_child_weight=3, gamma=0.05,
+        reg_alpha=0.1, reg_lambda=1.5,
+        scale_pos_weight=len(y[y==0]) / max(len(y[y==1]), 1),
         eval_metric="auc", use_label_encoder=False,
         random_state=42, verbosity=0,
     )
