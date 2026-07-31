@@ -156,7 +156,7 @@ def create_presentation():
 
     # Three pillars
     add_shape_box(slide, Inches(0.5), Inches(3.0), Inches(3.8), Inches(3.0),
-                  "PREDICT\n━━━━━━\nXGBoost ML model\ntrained on 4,800+\nhistorical visits\n\nAUC > 0.55",
+                  "PREDICT\n━━━━━━\nXGBoost ML model\ntrained on 4,804\nhistorical visits\n\nAUC: 60.4%",
                   CARD_BG, WHITE, font_size=14)
 
     add_shape_box(slide, Inches(4.8), Inches(3.0), Inches(3.8), Inches(3.0),
@@ -238,7 +238,7 @@ def create_presentation():
         "🔐  Auth: Azure AD Service Principal (client_credentials OAuth2 flow)",
         "📝  Queries: DAX via Power BI REST API (executeQueries endpoint)",
         "📋  Tables: staging_appointment (14 cols) + staging_patient (16 cols)",
-        "🔗  Join: Left merge on patient_id → 4,800+ enriched records",
+        "🔗  Join: Left merge on patient_id → 4,804 enriched records",
         "⚙️  Feature Engineering: lead_days, day_of_week, hour, past_noshow_ratio, etc.",
         "⏱️  Caching: st.cache_data with 1-hour TTL for performance",
     ]
@@ -256,7 +256,7 @@ def create_presentation():
     # Model details
     model_info = [
         "Algorithm: XGBClassifier (Extreme Gradient Boosting)",
-        "Training Data: 4,800+ historical in-person appointments",
+        "Training Data: 4,804 historical in-person appointments",
         "Train/Test Split: 80/20 with stratified sampling",
         "Evaluation: ROC-AUC Score",
         "Class Balancing: scale_pos_weight (auto-computed)",
@@ -426,9 +426,9 @@ def create_presentation():
     add_shape_box(slide, Inches(0.5), Inches(1.5), Inches(5.5), Inches(4.5),
                   "WITHOUT Intervention\n━━━━━━━━━━━━━━━━\n\n"
                   "💰 Avg Revenue/Appt: $250\n\n"
-                  "📉 Predicted No-Shows: ~35\n\n"
-                  "❌ Estimated Loss: $8,750+\n\n"
-                  "⚠️ Based on 594 upcoming\n     appointments in pipeline",
+                  "📉 Predicted No-Shows: ~43\n\n"
+                  "❌ Estimated Loss: $10,710\n\n"
+                  "⚠️ Based on 587 upcoming\n     appointments in pipeline",
                   CARD_BG, WHITE, font_size=15)
 
     # Right column - Savings
@@ -436,7 +436,7 @@ def create_presentation():
                   "WITH Risk-Based Intervention\n━━━━━━━━━━━━━━━━━━━━\n\n"
                   "🎯 High-Risk Callbacks: 40% recovery\n\n"
                   "📱 Medium-Risk SMS: 25% recovery\n\n"
-                  "✅ Recoverable Revenue: ~$2,500+\n\n"
+                  "✅ Recoverable Revenue: ~$4,280+\n\n"
                   "📈 ROI: Positive from Day 1\n     (zero infrastructure cost)",
                   CARD_BG, WHITE, font_size=15)
 

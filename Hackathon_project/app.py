@@ -983,6 +983,7 @@ with col_b:
               delta=f"{total_saved/max(total_loss,1)*100:.0f}% of loss recoverable")
     st.metric("High-Risk Callbacks Impact", f"${saved_high:,.0f}")
     st.metric("Medium-Risk SMS Impact", f"${saved_med:,.0f}")
+    st.metric("Low-Risk SMS Impact", f"${saved_low:,.0f}")
 
 st.divider()
 
