@@ -754,7 +754,7 @@ with st.sidebar:
 
     st.divider()
 
-    st.metric("Model AUC Score", f"{auc_score:.3f}")
+    st.metric("Model AUC Score", f"{auc_score*100:.1f}%")
     st.metric("Total Upcoming Appts", f"{len(upcoming):,}")
     st.caption(f"Data source: Power BI Semantic Model")
     st.caption(f"Workspace: {WORKSPACE_NAME}")
