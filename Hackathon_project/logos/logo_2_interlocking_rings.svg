@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="400" height="200">
+  <rect width="400" height="200" fill="#1B2A4A"/>
+  <!-- Left ring -->
+  <circle cx="175" cy="95" r="40" fill="none" stroke="#00B8A9" stroke-width="5"/>
+  <!-- Right ring -->
+  <circle cx="225" cy="95" r="40" fill="none" stroke="#00B8A9" stroke-width="5"/>
+  <!-- Overlap glow effect -->
+  <ellipse cx="200" cy="95" rx="15" ry="35" fill="#00B8A9" opacity="0.15"/>
+  <!-- Center nexus point -->
+  <circle cx="200" cy="95" r="8" fill="#FFFFFF"/>
+  <circle cx="200" cy="95" r="12" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.5"/>
+  <!-- Continuous infinity path overlay (thinner) -->
+  <path d="M140 95 C140 60, 185 55, 200 95 C215 135, 260 130, 260 95 C260 60, 215 55, 200 95 C185 135, 140 130, 140 95 Z"
+        fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.3" stroke-dasharray="4,4"/>
+  <!-- Text -->
+  <text x="200" y="160" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="bold" fill="#FFFFFF">INFINITY NEXUS</text>
+</svg>

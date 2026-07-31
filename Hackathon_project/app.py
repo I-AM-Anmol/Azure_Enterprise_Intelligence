@@ -701,10 +701,15 @@ Format responses with bullet points or short paragraphs for readability.
 # ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────────────────────────────────────
+import base64
+
+_LOGO_SVG_RAW = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 50 200 110" width="80" height="44"><path d="M120 100 C120 60, 180 60, 200 100 C220 140, 280 140, 280 100 C280 60, 220 60, 200 100 C180 140, 120 140, 120 100 Z" fill="none" stroke="#00B8A9" stroke-width="6" stroke-linecap="round"/><circle cx="200" cy="100" r="12" fill="#00B8A9"/><circle cx="200" cy="100" r="6" fill="#FFFFFF"/><line x1="200" y1="88" x2="200" y2="70" stroke="#00B8A9" stroke-width="2" opacity="0.6"/><line x1="200" y1="112" x2="200" y2="130" stroke="#00B8A9" stroke-width="2" opacity="0.6"/><line x1="188" y1="96" x2="175" y2="83" stroke="#00B8A9" stroke-width="2" opacity="0.6"/><line x1="212" y1="96" x2="225" y2="83" stroke="#00B8A9" stroke-width="2" opacity="0.6"/><line x1="188" y1="104" x2="175" y2="117" stroke="#00B8A9" stroke-width="2" opacity="0.6"/><line x1="212" y1="104" x2="225" y2="117" stroke="#00B8A9" stroke-width="2" opacity="0.6"/><circle cx="200" cy="70" r="3" fill="#00B8A9" opacity="0.6"/><circle cx="200" cy="130" r="3" fill="#00B8A9" opacity="0.6"/><circle cx="175" cy="83" r="3" fill="#00B8A9" opacity="0.6"/><circle cx="225" cy="83" r="3" fill="#00B8A9" opacity="0.6"/><circle cx="175" cy="117" r="3" fill="#00B8A9" opacity="0.6"/><circle cx="225" cy="117" r="3" fill="#00B8A9" opacity="0.6"/></svg>"""
+LOGO_B64 = base64.b64encode(_LOGO_SVG_RAW.encode()).decode()
+
 with st.sidebar:
-    st.markdown("""
+    st.markdown(f"""
     <div style="text-align:center; padding:15px 0;">
-        <span style="font-size:48px;">🏥</span>
+        <img src="data:image/svg+xml;base64,{LOGO_B64}" width="80" height="44" alt="Infinity Nexus"/>
         <h2 style="margin:5px 0 0; color:#00B8A9 !important; font-weight:700;">No-Show Predictor</h2>
         <p style="margin:0; color:#94A3B8 !important; font-size:0.85rem;">Clinical Appointment Intelligence</p>
     </div>
@@ -803,9 +808,9 @@ if category_filter:
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN DASHBOARD
 # ─────────────────────────────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(f"""
 <h1 style="margin-bottom:0; color:#1B2A4A !important; border-bottom:3px solid #00B8A9; padding-bottom:10px;">
-    🏥 Clinical No-Show Prediction Dashboard
+    <img src="data:image/svg+xml;base64,{LOGO_B64}" width="36" height="20" style="vertical-align:middle; margin-right:8px;" alt=""/> Clinical No-Show Prediction Dashboard
 </h1>
 """, unsafe_allow_html=True)
 st.caption(
